@@ -1,0 +1,21 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "emscripten-debug",
+      "displayName": "Emscripten Debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/emscripten-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_TOOLCHAIN_FILE": "C:/Users/Windows/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "emscripten-debug",
+      "configurePreset": "emscripten-debug"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+build/
+build-emscripten/
+.vs/
+.vscode/
+launch_workspace.ps1
