@@ -11,6 +11,7 @@ import "C"
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 	"unsafe"
 
@@ -30,6 +31,8 @@ func receiveOpcodeChannelMessageSend(client *ClientConn, data []byte) {
 	var payloadSize C.ushort
 
 	var sig [C.NK_ED25519_SIG_SIZE]C.uchar
+	var signed [C.NK_MAX_MESSAGE_SIZE + 10]C.uchar
+	var signedLen C.uint
 
 	if C.nk_decode_channel_message_send(
 		(*C.uchar)(unsafe.Pointer(&data[0])),
@@ -40,6 +43,8 @@ func receiveOpcodeChannelMessageSend(client *ClientConn, data []byte) {
 		&payload[0],
 		&payloadSize,
 		&sig[0],
+		&signed[0],
+		&signedLen,
 	) != 0 {
 		sendError(client, int(C.NK_OPCODE_CHANNEL_MESSAGE_SEND), int(C.NK_ERROR_INVALID_FRAME))
 		return
@@ -58,6 +63,7 @@ func receiveOpcodeChannelMessageSend(client *ClientConn, data []byte) {
 	).Scan(&exists)
 
 	if err != nil {
+		fmt.Println("Not a member")
 		sendError(client, int(C.NK_OPCODE_CHANNEL_MESSAGE_SEND), int(C.NK_ERROR_PERMISSION_DENIED))
 		return
 	}
@@ -76,18 +82,19 @@ func receiveOpcodeChannelMessageSend(client *ClientConn, data []byte) {
 
 	if C.nk_verify_signature(
 		(*C.uchar)(unsafe.Pointer(&edPub[0])),
-		(*C.uchar)(unsafe.Pointer(&payload[0])),
-		C.uint(payloadSize),
+		&signed[0],
+		signedLen,
 		&sig[0],
 	) != 0 {
-		sendError(client, int(C.NK_OPCODE_CHANNEL_MESSAGE_SEND), int(C.NK_ERROR_PERMISSION_DENIED))
+		fmt.Println("Wrong signature")
+		sendError(client, int(C.NK_OPCODE_CHANNEL_MESSAGE_SEND), int(C.NK_ERROR_INVALID_SIGNATURE))
 		return
 	}
 
 	goPayload := C.GoBytes(unsafe.Pointer(&payload[0]), C.int(payloadSize))
 
 	res, err := db.Exec(`
-		INSERT INTO messages (channel_id, sender_id, sender_device_id, ciphertext, key_version, created_at)
+		INSERT INTO messages (channel_id, sender_id, sender_device_id, payload, key_version, created_at)
 		VALUES (?, ?, ?, ?, ?, strftime('%s','now'))`,
 		int(channelID),
 		client.userID,
@@ -96,6 +103,7 @@ func receiveOpcodeChannelMessageSend(client *ClientConn, data []byte) {
 		int(keyVersion),
 	)
 	if err != nil {
+		fmt.Println(err.Error())
 		sendError(client, int(C.NK_OPCODE_CHANNEL_MESSAGE_SEND), int(C.NK_ERROR_INTERNAL))
 		return
 	}
@@ -173,9 +181,10 @@ func receiveOpcodeSyncChannelHistoryRequest(client *ClientConn, data []byte) {
 	}
 
 	var rows *sql.Rows
+	var err error
 	if fromID == C.NK_INVALID_MESSAGE {
-		rows, err := db.Query(`
-			SELECT id, sender_id, sender_device_id, ciphertext, key_version, created_at
+		rows, err = db.Query(`
+			SELECT id, sender_id, sender_device_id, payload, key_version, created_at
 			FROM messages
 			WHERE channel_id=?
 			ORDER BY id DESC
@@ -188,8 +197,8 @@ func receiveOpcodeSyncChannelHistoryRequest(client *ClientConn, data []byte) {
 		}
 		defer rows.Close()
 	} else {
-		rows, err := db.Query(`
-			SELECT id, sender_id, sender_device_id, ciphertext, key_version, created_at
+		rows, err = db.Query(`
+			SELECT id, sender_id, sender_device_id, payload, key_version, created_at
 			FROM messages
 			WHERE channel_id=? AND id>? 
 			ORDER BY id DESC
@@ -230,6 +239,11 @@ func receiveOpcodeSyncChannelHistoryRequest(client *ClientConn, data []byte) {
 		if outLen >= C.NK_MAX_PAYLOAD_ARRAY_SIZE {
 			break
 		}
+	}
+
+	if outLen == 0 {
+		sendError(client, int(C.NK_OPCODE_SYNC_CHANNEL_HISTORY), int(C.NK_ERROR_NOTHING_TO_SEND))
+		return
 	}
 
 	var replySize C.uint

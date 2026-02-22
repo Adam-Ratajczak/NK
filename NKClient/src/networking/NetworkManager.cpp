@@ -158,6 +158,12 @@ void NetworkManager::RequestDevices(const std::vector<unsigned int>& deviceIds){
 }
 
 void NetworkManager::RequestUserDevices(const std::vector<unsigned int>& userIds){
+    printf("User IDs:\n");
+    fflush(stdout);
+    for(auto id : userIds){
+        printf("Sending %d\n", id);
+        fflush(stdout);
+    }
     unsigned int frameSize = 0;
     unsigned char* frame = nk_encode_request_user_devices(userIds.data(), userIds.size(), SessionManager::TxKey.data(), &frameSize);
     if (!frame)

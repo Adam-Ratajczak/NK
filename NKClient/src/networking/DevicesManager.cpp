@@ -131,10 +131,9 @@ void DevicesManager::SendDeviceKeys() {
 }
 
 void DevicesManager::LoadDeviceInfo(const std::vector<DeviceInfo>& devices) {
+    printf("Received %d devices\n", devices.size());
+    fflush(stdout);
     for (const auto& d : devices) {
-        if (d.DeviceId == DeviceId)
-            continue;
-
         DeviceConn conn{};
         conn.DeviceId = d.DeviceId;
         conn.OwnerId = d.OwnerId;

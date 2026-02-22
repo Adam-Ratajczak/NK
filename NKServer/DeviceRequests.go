@@ -219,6 +219,15 @@ func receiveOpcodeRequestUserDevices(client *ClientConn, data []byte) {
 		return
 	}
 
+	fmt.Println("userIDsLen:", userIDsLen)
+	for i := 0; i < int(userIDsLen); i++ {
+		fmt.Println("requested user:", int(userIDs[i]))
+	}
+	var count int
+	fmt.Println("devices count:")
+	db.QueryRow("SELECT COUNT(*) FROM devices").Scan(&count)
+	fmt.Println(count)
+
 	allowed := map[int]bool{}
 	allowed[client.userID] = true
 
@@ -248,8 +257,7 @@ func receiveOpcodeRequestUserDevices(client *ClientConn, data []byte) {
 			}
 		}
 	}
-
-	var filtered []int
+	filtered := make([]int, 0, userIDsLen)
 
 	for i := 0; i < int(userIDsLen); i++ {
 		id := int(userIDs[i])
@@ -289,6 +297,10 @@ func receiveOpcodeRequestUserDevices(client *ClientConn, data []byte) {
 			continue
 		}
 
+		if len(x25519) != 32 || len(ed25519) != 32 {
+			continue
+		}
+
 		d := &devices[outLen]
 
 		d.deviceId = C.uint(id)
@@ -304,6 +316,7 @@ func receiveOpcodeRequestUserDevices(client *ClientConn, data []byte) {
 	}
 
 	if outLen == 0 {
+		sendError(client, int(C.NK_OPCODE_REQUEST_USER_DEVICES), int(C.NK_ERROR_NOTHING_TO_SEND))
 		return
 	}
 

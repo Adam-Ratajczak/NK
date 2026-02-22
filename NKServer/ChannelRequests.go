@@ -38,6 +38,7 @@ func receiveOpcodeChannelRequestRecipents(client *ClientConn, data []byte) {
 	).Scan(&exists)
 
 	if err != nil {
+		fmt.Println(err.Error())
 		sendError(client, int(C.NK_OPCODE_CHANNEL_REQUEST_RECIPENTS), int(C.NK_ERROR_PERMISSION_DENIED))
 		return
 	}
@@ -48,6 +49,7 @@ func receiveOpcodeChannelRequestRecipents(client *ClientConn, data []byte) {
 		int(channelID),
 	)
 	if err != nil {
+		fmt.Println(err.Error())
 		sendError(client, int(C.NK_OPCODE_CHANNEL_REQUEST_RECIPENTS), int(C.NK_ERROR_INTERNAL))
 		return
 	}
@@ -59,6 +61,7 @@ func receiveOpcodeChannelRequestRecipents(client *ClientConn, data []byte) {
 	for rows.Next() {
 		var uid int
 		if err := rows.Scan(&uid); err != nil {
+			fmt.Println(err.Error())
 			continue
 		}
 
@@ -92,6 +95,7 @@ func receiveOpcodeChannelRequestRecipents(client *ClientConn, data []byte) {
 
 	C.free(unsafe.Pointer(reply))
 }
+
 func receiveOpcodeChannelRequestDM(client *ClientConn, data []byte) {
 	var targetUserID C.uint
 
@@ -101,11 +105,13 @@ func receiveOpcodeChannelRequestDM(client *ClientConn, data []byte) {
 		&client.rxKey[0],
 		&targetUserID,
 	) != 0 {
+		fmt.Println("receiveOpcodeChannelRequestDM NK_ERROR_INVALID_FRAME")
 		sendError(client, int(C.NK_OPCODE_CHANNEL_REQUEST_DM), int(C.NK_ERROR_INVALID_FRAME))
 		return
 	}
 
 	if int(targetUserID) == client.userID {
+		fmt.Println("receiveOpcodeChannelRequestDM NK_ERROR_RECIPENT_CANNOT_BE_SENDER")
 		sendError(client, int(C.NK_OPCODE_CHANNEL_REQUEST_DM), int(C.NK_ERROR_RECIPENT_CANNOT_BE_SENDER))
 		return
 	}
@@ -119,6 +125,7 @@ func receiveOpcodeChannelRequestDM(client *ClientConn, data []byte) {
 
 	tx, err := db.Begin()
 	if err != nil {
+		fmt.Println(err.Error())
 		sendError(client, int(C.NK_OPCODE_CHANNEL_REQUEST_DM), int(C.NK_ERROR_INTERNAL))
 		return
 	}
@@ -145,6 +152,7 @@ func receiveOpcodeChannelRequestDM(client *ClientConn, data []byte) {
 			int(C.NK_CHANNEL_TYPE_DM),
 		)
 		if err != nil {
+			fmt.Println(err.Error())
 			tx.Rollback()
 			goto fail
 		}
@@ -158,6 +166,7 @@ func receiveOpcodeChannelRequestDM(client *ClientConn, data []byte) {
 			userA, userB, channelID,
 		)
 		if err != nil {
+			fmt.Println(err.Error())
 			tx.Rollback()
 			goto fail
 		}
@@ -170,16 +179,19 @@ func receiveOpcodeChannelRequestDM(client *ClientConn, data []byte) {
 			channelID, userB,
 		)
 		if err != nil {
+			fmt.Println(err.Error())
 			tx.Rollback()
 			goto fail
 		}
 
 	} else if err != nil {
+		fmt.Println(err.Error())
 		tx.Rollback()
 		goto fail
 	}
 
 	if err := tx.Commit(); err != nil {
+		fmt.Println(err.Error())
 		goto fail
 	}
 
@@ -191,6 +203,7 @@ func receiveOpcodeChannelRequestDM(client *ClientConn, data []byte) {
 	)
 
 	if reply == nil {
+		fmt.Println("NULL reply")
 		goto fail
 	}
 
@@ -205,9 +218,11 @@ fail:
 }
 
 func receiveOpcodeChannelSubmitKey(client *ClientConn, data []byte) {
+	fmt.Println("receiveOpcodeChannelSubmitKey")
 	if !ensureDeviceReady(client, int(C.NK_OPCODE_CHANNEL_SUBMIT_KEY)) {
 		return
 	}
+	fmt.Println("Device ready")
 
 	var channelID C.uint
 
@@ -411,6 +426,7 @@ func receiveOpcodeSyncChannelKeysRequest(client *ClientConn, data []byte) {
 		int(channelID), client.deviceID,
 	)
 	if err != nil {
+		fmt.Println(err.Error())
 		sendError(client, int(C.NK_OPCODE_SYNC_CHANNEL_KEYS_REQUEST), int(C.NK_ERROR_INTERNAL))
 		return
 	}
@@ -449,6 +465,7 @@ func receiveOpcodeSyncChannelKeysRequest(client *ClientConn, data []byte) {
 		int(channelID), client.userID,
 	)
 	if err != nil {
+		fmt.Println(err.Error())
 		sendError(client, int(C.NK_OPCODE_SYNC_CHANNEL_KEYS_REQUEST), int(C.NK_ERROR_INTERNAL))
 		return
 	}
@@ -492,6 +509,7 @@ func receiveOpcodeSyncChannelKeysRequest(client *ClientConn, data []byte) {
 	)
 
 	if reply == nil {
+		fmt.Println("NULL reply")
 		sendError(client, int(C.NK_OPCODE_SYNC_CHANNEL_KEYS), int(C.NK_ERROR_INTERNAL))
 		return
 	}

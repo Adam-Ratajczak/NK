@@ -19,7 +19,7 @@ std::vector<DeviceConn> ChannelsManager::_deviceConnectionsSyncing;
 void ChannelsManager::Register(){
     SubscribeRecipents(&ChannelsManager::GetDeviceConnFromRecipents);
     DevicesManager::Subscribe(&ChannelsManager::AddDeviceConn);
-    RequestManager::SubscribeErrorRequest(NK_OPCODE_SYNC_CHANNEL_KEYS, &ChannelsManager::FetchingKeysError);
+    RequestManager::SubscribeErrorRequest(NK_OPCODE_SYNC_CHANNEL_KEYS_REQUEST, &ChannelsManager::FetchingKeysError);
     ChannelKeysManager::Subscribe(&ChannelsManager::FetchingKeysSuccess);
 }
 
@@ -113,10 +113,14 @@ void ChannelsManager::SyncWithChannel(unsigned int channelId){
         return;
     }
 
+    printf("Syncing with channel %d\n", channelId);
+    fflush(stdout);
     ChannelKeyInfo keyInfo;
     if(ChannelKeysManager::GetActiveChannelKey(channelId, keyInfo)){
         return;
     }
+    printf("No active key\n");
+    fflush(stdout);
 
     _channelSyncing = channelId;
     
@@ -125,6 +129,9 @@ void ChannelsManager::SyncWithChannel(unsigned int channelId){
 
 void ChannelsManager::FetchingKeysSuccess(const ChannelKeyInfo& keyInfo){
     if(keyInfo.ChannelId == _channelSyncing){
+        printf("Fetching key success\n");
+        fflush(stdout);
+        
         _channelSyncing = 0;
         _recipentsSyncing = RecipentsInfo{};
         _deviceConnectionsSyncing.clear();
@@ -133,13 +140,25 @@ void ChannelsManager::FetchingKeysSuccess(const ChannelKeyInfo& keyInfo){
 
 void ChannelsManager::FetchingKeysError(unsigned int errNo){
     RecipentsInfo recipents;
+    printf("No keys on the server\n");
+    fflush(stdout);
     if(!GetRecipents(_channelSyncing, recipents)){
+        printf("No recipents\n");
+        fflush(stdout);
         return;
     }
     GetDeviceConnFromRecipents(recipents);
 }
 
 void ChannelsManager::GetDeviceConnFromRecipents(const RecipentsInfo& recipents){
+    printf("Has recipents\n");
+    printf("User IDs:\n");
+    fflush(stdout);
+    for(auto id : recipents.Recipents){
+        printf("Received %d\n", id);
+        fflush(stdout);
+    }
+    fflush(stdout);
     _recipentsSyncing = recipents;
     _usersWithoutDeviceConnectionsSyncing = _recipentsSyncing.Recipents;
 
@@ -153,6 +172,8 @@ void ChannelsManager::GetDeviceConnFromRecipents(const RecipentsInfo& recipents)
     }
 
     if(!_usersWithoutDeviceConnectionsSyncing.empty()){
+        printf("Not enough devices\n");
+        fflush(stdout);
         NetworkManager::RequestUserDevices(_usersWithoutDeviceConnectionsSyncing);
     }
 }
@@ -163,8 +184,12 @@ void ChannelsManager::AddDeviceConn(const DeviceConn& conn){
     if(it != _usersWithoutDeviceConnectionsSyncing.end()){
         _usersWithoutDeviceConnectionsSyncing.erase(it);
     }
+    printf("Fetching device of user %d, remaining users %d\n", conn.OwnerId, _usersWithoutDeviceConnectionsSyncing.size());
+    fflush(stdout);
 
     if(_usersWithoutDeviceConnectionsSyncing.empty()){
+        printf("Generate keys\n");
+        fflush(stdout);
         NetworkManager::GenerateAndSendChannelKey(_channelSyncing, _deviceConnectionsSyncing);
     }
 }

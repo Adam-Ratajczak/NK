@@ -23,6 +23,7 @@ void RequestManager::Register(){
     SubscribeRequest(NK_OPCODE_SYNC_USER_DATA, &RequestManager::ProcessSyncUserDataRequest);
     SubscribeRequest(NK_OPCODE_SYNC_FRIEND_REQUESTS, &RequestManager::ProcessSyncFriendRequestsRequest);
     SubscribeRequest(NK_OPCODE_SYNC_RELATIONS, &RequestManager::ProcessSyncRelationsRequest);
+    SubscribeRequest(NK_OPCODE_REQUEST_DEVICES_RESULT, &RequestManager::ProcessRequestDevicesResult);
     SubscribeRequest(NK_OPCODE_CHANNEL_REQUEST_DM_RESULT, &RequestManager::ProcessChannelRequestDMResultRequest);
     SubscribeRequest(NK_OPCODE_CHANNEL_REQUEST_RECIPENTS_RESULT, &RequestManager::ProcessChannelRequestRecipentsResultRequest);
     SubscribeRequest(NK_OPCODE_CHANNEL_SUBMIT_KEY_RESULT, &RequestManager::ProcessChannelSubmitKeyResultRequest);
@@ -253,7 +254,7 @@ void RequestManager::ProcessChannelRequestDMResultRequest(const unsigned char* d
     unsigned int userId, channelId;
     printf("ProcessChannelRequestDMResultRequest\n");
     fflush(stdout);
-    if(nk_decode_channel_request_dm_result(data, len, SessionManager::RxKey.data(), &channelId, &userId) == 0){
+    if(nk_decode_channel_request_dm_result(data, len, SessionManager::RxKey.data(), &userId, &channelId) == 0){
         DMChannelInfo info;
         info.ChannelId = channelId;
         info.UserId = userId;
@@ -270,6 +271,7 @@ void RequestManager::ProcessChannelRequestRecipentsResultRequest(const unsigned 
     if(nk_decode_channel_request_recipents_result(data, len, SessionManager::RxKey.data(), &channelId, userIds, &userIdsLen) == 0){
         std::vector<unsigned int> recipents;
         recipents.resize(userIdsLen);
+        memcpy(recipents.data(), userIds, recipents.size() * sizeof(unsigned int));
         ChannelsManager::LoadRecipents(channelId, recipents);
     }else{
         ApplyError(NK_OPCODE_CHANNEL_REQUEST_RECIPENTS_RESULT, NK_ERROR_INVALID_FRAME);
@@ -393,6 +395,8 @@ void RequestManager::ApplyOk(unsigned char opcode){
 }
 
 void RequestManager::ApplyError(unsigned char opcode, int errNo){
+    printf("Error opcode %x, errNo %x", opcode, errNo);
+    fflush(stdout);
     auto it = _errorRequestSubscribers.find(opcode);
     if (it != _errorRequestSubscribers.end() && it->second) {
         it->second(errNo);

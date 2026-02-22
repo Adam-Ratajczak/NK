@@ -1359,10 +1359,10 @@ unsigned char* nk_encode_request_user_devices(const unsigned int userIds[NK_MAX_
 
     unsigned char* p = plain;
     p += nk_encode_u16(p, userIdsLen);
-    p += nk_encode_bytes(p, (const char*)userIds, userIdsLen * sizeof(unsigned int));
+    p += nk_encode_bytes(p, (unsigned char*)userIds, userIdsLen * sizeof(unsigned int));
 
     unsigned int cipherSize = 0;
-    unsigned char* payload = nk_encrypt_payload(txKey, plain, 4, &cipherSize);
+    unsigned char* payload = nk_encrypt_payload(txKey, plain, plainLen, &cipherSize);
 
     if (!payload)
         return NULL;
@@ -1384,6 +1384,7 @@ unsigned char* nk_encode_request_user_devices(const unsigned int userIds[NK_MAX_
     memcpy(frame + NK_HEADER_SIZE, payload, cipherSize);
 
     free(payload);
+    free(plain);
     *frameSize = totalLen;
 
     return frame;
@@ -2689,6 +2690,7 @@ int nk_decode_channel_submit_key(const unsigned char* frame, const unsigned int 
     }
 
     const unsigned char* p = plain;
+    const unsigned char* end = plain + plainLen;
 
     p += nk_decode_u32(p, channelId);
     p += nk_decode_u16(p, deviceKeysLen);
@@ -2701,7 +2703,6 @@ int nk_decode_channel_submit_key(const unsigned char* frame, const unsigned int 
 
         p += nk_decode_u32(p, &k->targetDeviceId);
         p += nk_decode_u16(p, &k->encryptedKeySize);
-
         if (k->encryptedKeySize > NK_MAX_ENCRYPTED_KEY_SIZE)
             goto fail;
 
@@ -2715,8 +2716,8 @@ int nk_decode_channel_submit_key(const unsigned char* frame, const unsigned int 
 
     p += nk_decode_bytes(p, umkEncryptedKey, *umkKeySize);
 
-    if ((unsigned int)(p - plain) != plainLen)
-        goto fail;
+    unsigned char signature[NK_ED25519_SIG_SIZE];
+    p += nk_decode_bytes(p, signature, NK_ED25519_SIG_SIZE);
 
     sodium_memzero(plain, plainLen);
     free(plain);
@@ -3198,7 +3199,7 @@ unsigned char* nk_encode_channel_message_send(const unsigned int channelId, cons
     if (!enc)
         return NULL;
 
-    unsigned int plainLen = 4 + 4 + 2 + encSize + NK_X25519_KEY_SIZE;
+    unsigned int plainLen = 4 + 4 + 2 + encSize + NK_ED25519_SIG_SIZE;
 
     unsigned char* plain = malloc(plainLen);
     if (!plain) {
@@ -3248,14 +3249,16 @@ unsigned char* nk_encode_channel_message_send(const unsigned int channelId, cons
     return frame;
 }
 
-int nk_decode_channel_message_send(const unsigned char* frame, const unsigned int frameSize, const unsigned char rxKey[NK_X25519_KEY_SIZE], unsigned int* channelId, unsigned int* keyVersion, 
-                                   unsigned char payload[NK_MAX_MESSAGE_SIZE], unsigned short* payloadSize, unsigned char signature[NK_ED25519_SIG_SIZE])
-{
-    if (!frame || !rxKey)
+int nk_decode_channel_message_send(const unsigned char* frame, const unsigned int frameSize, const unsigned char rxKey[NK_X25519_KEY_SIZE], 
+                                   unsigned int* channelId, unsigned int* keyVersion, unsigned char payload[NK_MAX_MESSAGE_SIZE], unsigned short* payloadSize,
+                                   unsigned char signature[NK_ED25519_SIG_SIZE], unsigned char* signedBuf, unsigned int* signedLen){
+    if (!frame || !rxKey || !channelId || !keyVersion ||
+        !payload || !payloadSize || !signature ||
+        !signedBuf || !signedLen)
         return -1;
 
-    unsigned char opcode;
-    unsigned int payloadLen;
+    unsigned char opcode = 0;
+    unsigned int payloadLen = 0;
 
     if (nk_decode_header(frame, frameSize, &opcode, &payloadLen) != 0)
         return -1;
@@ -3269,7 +3272,13 @@ int nk_decode_channel_message_send(const unsigned char* frame, const unsigned in
 
     unsigned int plainLen = 0;
 
-    if (nk_decrypt_payload(rxKey, frame + NK_HEADER_SIZE, payloadLen, plain, &plainLen) != 0) {
+    if (nk_decrypt_payload(
+            rxKey,
+            frame + NK_HEADER_SIZE,
+            payloadLen,
+            plain,
+            &plainLen) != 0)
+    {
         free(plain);
         return -1;
     }
@@ -3280,7 +3289,18 @@ int nk_decode_channel_message_send(const unsigned char* frame, const unsigned in
     p += nk_decode_u32(p, keyVersion);
 
     p += nk_decode_u16(p, payloadSize);
+
+    if (*payloadSize > NK_MAX_MESSAGE_SIZE) {
+        sodium_memzero(plain, plainLen);
+        free(plain);
+        return -1;
+    }
+
     p += nk_decode_bytes(p, payload, *payloadSize);
+
+    *signedLen = 4 + 4 + 2 + *payloadSize;
+
+    memcpy(signedBuf, plain, *signedLen);
 
     p += nk_decode_bytes(p, signature, NK_ED25519_SIG_SIZE);
 

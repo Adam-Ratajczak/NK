@@ -191,6 +191,11 @@ func wsHandler(c echo.Context) error {
 			continue
 		}
 
+		if opcode == C.NK_OPCODE_CHANNEL_REQUEST_DM {
+			receiveOpcodeChannelRequestDM(client, data)
+			continue
+		}
+
 		if opcode == C.NK_OPCODE_CHANNEL_REQUEST_RECIPENTS {
 			receiveOpcodeChannelRequestRecipents(client, data)
 			continue
@@ -225,6 +230,8 @@ func wsHandler(c echo.Context) error {
 			receiveOpcodeChannelTypingUpdate(client, data)
 			continue
 		}
+
+		sendError(client, int(C.NK_OPCODE_INVALID), int(C.NK_ERROR_OPCODE_NOT_SUPPORTED))
 	}
 
 	return nil
@@ -367,15 +374,16 @@ func main() {
 	}
 
 	createTable = `
-		CREATE TABLE IF NOT EXISTS channel_keys (
-			channel_id INTEGER,
-			device_id INTEGER,
-			sender_device_id INTEGER,
-
-			encrypted_key_device BLOB NOT NULL,
+		CREATE TABLE IF NOT EXISTS channel_keys_device (
+			channel_id INTEGER NOT NULL,
 			key_version INTEGER NOT NULL,
 
-			PRIMARY KEY (channel_id, device_id, key_version)
+			sender_device_id INTEGER NOT NULL,
+			target_device_id INTEGER NOT NULL,
+
+			encrypted_key BLOB NOT NULL,
+
+			PRIMARY KEY (channel_id, target_device_id, key_version)
 		);
 		`
 	_, err = db.Exec(createTable)
@@ -387,10 +395,11 @@ func main() {
 		CREATE TABLE IF NOT EXISTS channel_keys_backup (
 			channel_id INTEGER,
 			key_version INTEGER,
+			user_id INTEGER,
 
-			encrypted_key_umk BLOB NOT NULL,
+			encrypted_key BLOB NOT NULL,
 
-			PRIMARY KEY (channel_id, key_version)
+			PRIMARY KEY (channel_id, key_version, user_id)
 		);
 		`
 	_, err = db.Exec(createTable)
@@ -401,10 +410,12 @@ func main() {
 	createTable = `
 		CREATE TABLE IF NOT EXISTS messages (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+
 			channel_id INTEGER,
+			sender_id INTEGER,
 			sender_device_id INTEGER,
 
-			payload BLOB NOT NULL, -- contains nonce + ciphertext
+			payload BLOB NOT NULL,
 			key_version INTEGER,
 
 			created_at INTEGER
