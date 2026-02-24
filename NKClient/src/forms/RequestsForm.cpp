@@ -8,9 +8,9 @@
 #include <JsLogger.hpp>
 #include <imgui.h>
 
-std::set<int> RequestsForm::_userIds;
-std::map<int, FriendRequestInfo> RequestsForm::_friendRequests;
-std::map<int, UserInfo> RequestsForm::_users;
+std::unordered_set<int> RequestsForm::_userIds;
+std::unordered_map<int, FriendRequestInfo> RequestsForm::_friendRequests;
+std::unordered_map<int, UserInfo> RequestsForm::_users;
 void RequestsForm::Create(){
     FormManager::SubscribeOpen("RequestsForm", &RequestsForm::Open);
     FormManager::SubscribeRender("RequestsForm", &RequestsForm::Render);

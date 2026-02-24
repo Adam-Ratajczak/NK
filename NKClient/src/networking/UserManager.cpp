@@ -5,7 +5,7 @@
 #include "JsLogger.hpp"
 #include "nk_protocol.h"
 
-std::map<unsigned int, UserInfo> UserManager::_users;
+std::unordered_map<unsigned int, UserInfo> UserManager::_users;
 std::vector<UserInfoDelegate> UserManager::_subscribers;
 std::array<unsigned char, 32> UserManager::UMK;
 std::array<unsigned char, 16> UserManager::SaltBytes;

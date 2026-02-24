@@ -2848,7 +2848,7 @@ unsigned char* nk_encode_channel_backup_keys(const NKChannelBackupKeyInput keys[
     unsigned int plainLen = 2;
 
     for (unsigned short i = 0; i < keysLen; i++) {
-        plainLen += 4 + 2 + encSizes[i];
+        plainLen += 4 + 4 + 2 + encSizes[i];
     }
 
     unsigned char* plain = malloc(plainLen);
@@ -2861,6 +2861,7 @@ unsigned char* nk_encode_channel_backup_keys(const NKChannelBackupKeyInput keys[
 
     for (unsigned short i = 0; i < keysLen; i++) {
         p += nk_encode_u32(p, keys[i].channelId);
+        p += nk_encode_u32(p, keys[i].keyVersion);
         p += nk_encode_u16(p, encSizes[i]);
         p += nk_encode_bytes(p, encKeys[i], encSizes[i]);
     }
@@ -3396,8 +3397,24 @@ int nk_decode_channel_message_deliver(const unsigned char* frame, const unsigned
     p += nk_decode_u32(p, &message->keyVersion);
 
     p += nk_decode_u16(p, &message->payloadSize);
+
+    if (message->payloadSize > NK_MAX_MESSAGE_SIZE) {
+        free(plain);
+        return -1;
+    }
+
     p += nk_decode_bytes(p, message->payload, message->payloadSize);
+
     p += nk_decode_bytes(p, message->sig, NK_ED25519_SIG_SIZE);
+
+    unsigned char* s = message->signedBuf;
+
+    s += nk_encode_u32(s, *channelId);
+    s += nk_encode_u32(s, message->keyVersion);
+    s += nk_encode_u16(s, message->payloadSize);
+    s += nk_encode_bytes(s, message->payload, message->payloadSize);
+
+    message->signedSize = (unsigned short)(s - message->signedBuf);
 
     free(plain);
     return 0;
@@ -3588,6 +3605,15 @@ int nk_decode_sync_channel_history(const unsigned char* frame, const unsigned in
         p += nk_decode_u16(p, &m->payloadSize);
         p += nk_decode_bytes(p, m->payload, m->payloadSize);
         p += nk_decode_bytes(p, m->sig, NK_ED25519_SIG_SIZE);
+
+        unsigned char* s = m->signedBuf;
+
+        s += nk_encode_u32(s, *channelId);
+        s += nk_encode_u32(s, m->keyVersion);
+        s += nk_encode_u16(s, m->payloadSize);
+        s += nk_encode_bytes(s, m->payload, m->payloadSize);  
+
+        m->signedSize = (unsigned short)(s - m->signedBuf);
     }
 
     free(plain);

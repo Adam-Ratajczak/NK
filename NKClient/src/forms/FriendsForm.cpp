@@ -12,8 +12,8 @@
 #include <imgui.h>
 #include "nk_protocol.h"
 
-std::set<int> FriendsForm::_friendUserIds;
-std::map<int, UserInfo> FriendsForm::_friendUsers;
+std::unordered_set<int> FriendsForm::_friendUserIds;
+std::unordered_map<int, UserInfo> FriendsForm::_friendUsers;
 std::string FriendsForm::_errorMsg;
 void FriendsForm::Create(){
     FormManager::SubscribeOpen("FriendsForm", &FriendsForm::Open);
@@ -128,6 +128,8 @@ void FriendsForm::Render()
                     DMChannelInfo DMChannel;
                     if(ChannelsManager::GetDMInfo(user.UserId, DMChannel)){
                         OnDMChannelInfo(DMChannel);
+                    }else{
+                        NetworkManager::RequestDM(user.UserId);
                     }
                 }
                 

@@ -245,6 +245,8 @@ else() # Emscripten settings
             "-sASSERTIONS=1"
             "-sDISABLE_EXCEPTION_CATCHING=1"
             "-sWASM_BIGINT=1"
+            "-sASYNCIFY_STACK_SIZE=131072"
+            "-sSTACK_SIZE=262144"
             "-sEXPORTED_RUNTIME_METHODS=['HEAPU8', 'ccall','cwrap']"
             "--shell-file=${CMAKE_CURRENT_LIST_DIR}/shell_minimal.html"
             "--preload-file ${CMAKE_CURRENT_LIST_DIR}/fonts/"

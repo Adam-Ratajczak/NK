@@ -8,9 +8,9 @@
 std::vector<DMChannelInfoDelegate> ChannelsManager::_subscribersDM;
 std::vector<TypingInfoDelegate> ChannelsManager::_subscribersTyping;
 std::vector<RecipentsInfoDelegate> ChannelsManager::_subscribersRecipents;
-std::map<unsigned int, DMChannelInfo> ChannelsManager::_channelsDM;
-std::map<unsigned int, TypingInfo> ChannelsManager::_typing;
-std::map<unsigned int, RecipentsInfo> ChannelsManager::_recipents;
+std::unordered_map<unsigned int, DMChannelInfo> ChannelsManager::_channelsDM;
+std::unordered_map<unsigned int, TypingInfo> ChannelsManager::_typing;
+std::unordered_map<unsigned int, RecipentsInfo> ChannelsManager::_recipents;
 unsigned int ChannelsManager::_channelSyncing;
 RecipentsInfo ChannelsManager::_recipentsSyncing;
 std::vector<unsigned int> ChannelsManager::_usersWithoutDeviceConnectionsSyncing;

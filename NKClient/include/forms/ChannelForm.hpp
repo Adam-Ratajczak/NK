@@ -19,5 +19,5 @@ private:
     static bool _isTyping;
     static UserInfo _recipent;
     static ChannelKeyInfo _channelKey;
-    static std::map<unsigned int, ChannelMessageInfo> _messages;
+    static std::unordered_map<unsigned int, ChannelMessageInfo> _messages;
 };

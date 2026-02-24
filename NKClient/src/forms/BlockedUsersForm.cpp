@@ -7,8 +7,8 @@
 #include <networking/UserRelationsManager.hpp>
 #include <imgui.h>
 
-std::set<int> BlockedUsersForm::_blockedUserIds;
-std::map<int, UserInfo> BlockedUsersForm::_blockedUsers;
+std::unordered_set<int> BlockedUsersForm::_blockedUserIds;
+std::unordered_map<int, UserInfo> BlockedUsersForm::_blockedUsers;
 void BlockedUsersForm::Create(){
     FormManager::SubscribeOpen("BlockedUsersForm", &BlockedUsersForm::Open);
     FormManager::SubscribeRender("BlockedUsersForm", &BlockedUsersForm::Render);

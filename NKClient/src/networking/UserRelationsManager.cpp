@@ -2,7 +2,7 @@
 #include "networking/NetworkManager.hpp"
 #include <JsLogger.hpp>
 
-std::map<unsigned int, UserRelationInfo> UserRelationsManager::_userRelations;
+std::unordered_map<unsigned int, UserRelationInfo> UserRelationsManager::_userRelations;
 std::vector<UserRelationInfoDelegate> UserRelationsManager::_subscribers;
 void UserRelationsManager::LoadUserRelationInfo(const std::vector<UserRelationInfo>& userRelationsInfo){
     for(const auto& userRelation : userRelationsInfo){

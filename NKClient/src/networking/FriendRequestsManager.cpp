@@ -2,7 +2,7 @@
 #include "networking/NetworkManager.hpp"
 #include <JsLogger.hpp>
 
-std::map<unsigned int, FriendRequestInfo> FriendRequestsManager::_friendRequests;
+std::unordered_map<unsigned int, FriendRequestInfo> FriendRequestsManager::_friendRequests;
 std::vector<FriendRequestInfoDelegate> FriendRequestsManager::_subscribers;
 void FriendRequestsManager::LoadFriendRequestInfo(const std::vector<FriendRequestInfo>& friendRequestsInfo){
     for(const auto& friendRequest : friendRequestsInfo){

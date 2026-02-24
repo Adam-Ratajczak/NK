@@ -1,5 +1,5 @@
 #pragma once
-#include <map>
+#include <unordered_map>
 #include "../structs.hpp"
 
 class UserRelationsManager{
@@ -15,6 +15,6 @@ public:
 private:
     static void Notify(const UserRelationInfo& userRelation);
 
-    static std::map<unsigned int, UserRelationInfo> _userRelations;
+    static std::unordered_map<unsigned int, UserRelationInfo> _userRelations;
     static std::vector<UserRelationInfoDelegate> _subscribers;
 };

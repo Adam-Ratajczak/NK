@@ -10,8 +10,8 @@
 #include "forms/ChannelForm.hpp"
 
 std::string FormManager::_toRender;
-std::map<std::string, FormActionDelegate> FormManager::_openSubscribers;
-std::map<std::string, FormActionDelegate> FormManager::_renderSubscribers;
+std::unordered_map<std::string, FormActionDelegate> FormManager::_openSubscribers;
+std::unordered_map<std::string, FormActionDelegate> FormManager::_renderSubscribers;
 void FormManager::SubscribeOpen(const std::string& formName, FormActionDelegate delegate){
     _openSubscribers[formName] = delegate;
 }

@@ -1,6 +1,6 @@
 #pragma once
 #include "../structs.hpp"
-#include <set>
+#include <unordered_set>
 
 class ChannelsManager{
 public:
@@ -34,9 +34,9 @@ private:
     static std::vector<DMChannelInfoDelegate> _subscribersDM;
     static std::vector<TypingInfoDelegate> _subscribersTyping;
     static std::vector<RecipentsInfoDelegate> _subscribersRecipents;
-    static std::map<unsigned int, DMChannelInfo> _channelsDM;
-    static std::map<unsigned int, TypingInfo> _typing;
-    static std::map<unsigned int, RecipentsInfo> _recipents;
+    static std::unordered_map<unsigned int, DMChannelInfo> _channelsDM;
+    static std::unordered_map<unsigned int, TypingInfo> _typing;
+    static std::unordered_map<unsigned int, RecipentsInfo> _recipents;
 
     static unsigned int _channelSyncing;
     static RecipentsInfo _recipentsSyncing;

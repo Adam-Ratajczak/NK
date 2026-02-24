@@ -1,6 +1,6 @@
 #pragma once
 #include "../structs.hpp"
-#include <map>
+#include <unordered_map>
 
 class DevicesManager{
 public:
@@ -25,6 +25,6 @@ private:
 
     static void Notify(const DeviceConn& deviceConn);
 
-    static std::map<unsigned int, DeviceConn> _deviceConnections;
+    static std::unordered_map<unsigned int, DeviceConn> _deviceConnections;
     static std::vector<DeviceConnDelegate> _subscribers;
 };

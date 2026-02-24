@@ -163,7 +163,8 @@ typedef struct NKChannelSubmitDeviceKey {
 
 typedef struct NKChannelBackupKeyInput {
     unsigned int channelId;
-    const unsigned char channelKey[NK_X25519_KEY_SIZE];
+    unsigned int keyVersion;
+    unsigned char channelKey[NK_X25519_KEY_SIZE];
 } NKChannelBackupKeyInput;
 
 typedef struct NKEncryptedChannelBackupKeyData {
@@ -197,7 +198,9 @@ typedef struct NKChannelMessageData {
     unsigned int senderDeviceId;
     unsigned int keyVersion;
     unsigned short payloadSize;
+    unsigned short signedSize;
     unsigned char payload[NK_MAX_MESSAGE_SIZE];
+    unsigned char signedBuf[NK_MAX_MESSAGE_SIZE];
     unsigned char sig[NK_ED25519_SIG_SIZE];
 } NKChannelMessageData;
 #define NK_INVALID_MESSAGE                           0xFFFFFFFF

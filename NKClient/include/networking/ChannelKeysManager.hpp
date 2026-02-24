@@ -17,7 +17,8 @@ public:
 private:
     static void DecryptAllPossibleKeys();
     static void DecryptByDevice(const DeviceConn& deviceConn);
-    static void RequestDevices();
+
+    static void BackupAllKeys();
 
     static void Notify(const ChannelKeyInfo& channelKey);
 
@@ -26,7 +27,6 @@ private:
 
     static std::vector<DeviceKeyEncryptedChannelKeyInfo> _encryptedKeys;
 
-    static std::map<unsigned long long, ChannelKeyInfo> _keys;
-
+    static std::unordered_map<unsigned long long, ChannelKeyInfo> _keys;
     static std::vector<ChannelKeyInfoDelegate> _subscribers;
 };

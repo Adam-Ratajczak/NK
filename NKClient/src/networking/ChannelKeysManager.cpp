@@ -4,10 +4,10 @@
 #include "networking/DevicesManager.hpp"
 #include "networking/NetworkManager.hpp"
 #include "nk_protocol.h"
-#include <set>
+#include <unordered_set>
 
 std::vector<DeviceKeyEncryptedChannelKeyInfo> ChannelKeysManager::_encryptedKeys;
-std::map<unsigned long long, ChannelKeyInfo> ChannelKeysManager::_keys;
+std::unordered_map<unsigned long long, ChannelKeyInfo> ChannelKeysManager::_keys;
 std::vector<ChannelKeyInfoDelegate> ChannelKeysManager::_subscribers;
 void ChannelKeysManager::Register(){
     DevicesManager::Subscribe(&ChannelKeysManager::OnNewDevices);
@@ -20,10 +20,7 @@ void ChannelKeysManager::Subscribe(ChannelKeyInfoDelegate func){
 void ChannelKeysManager::LoadDeviceEncryptedKeys(const std::vector<DeviceKeyEncryptedChannelKeyInfo>& keys){
     printf("Device keys: %d\n", keys.size());
     fflush(stdout);
-    for (const auto& k : keys){
-        _encryptedKeys.push_back(k);
-    }
-
+    _encryptedKeys.insert(_encryptedKeys.end(), keys.begin(), keys.end());
     DecryptAllPossibleKeys();
 }
 
@@ -31,6 +28,12 @@ void ChannelKeysManager::LoadBackupEncryptedKeys(const std::vector<BackupKeyEncr
     for (const auto& k : keys){
         std::vector<unsigned char> decrypted(32);
         unsigned int outSize = 0;
+        auto ind = MakeKey(k.ChannelId, k.KeyVersion);
+        auto it = _keys.find(ind);
+        if(it != _keys.end()){
+            it->second.HasBackup = true;
+            continue;
+        }
 
         if (nk_decrypt_payload(UserManager::UMK.data(), k.EncryptedKey.data(), k.EncryptedKey.size(), decrypted.data(), &outSize) != 0)
         {
@@ -48,20 +51,18 @@ void ChannelKeysManager::LoadBackupEncryptedKeys(const std::vector<BackupKeyEncr
         ChannelKeyInfo info{};
         info.ChannelId = k.ChannelId;
         info.KeyVersion = k.KeyVersion;
+        info.HasBackup = true;
         memcpy(info.Key.data(), decrypted.data(), 32);
 
         printf("Key version: %d\n", info.KeyVersion);
         fflush(stdout);
-        _keys[MakeKey(info.ChannelId, info.KeyVersion)] = info;
+        _keys[ind] = info;
         Notify(info);
     }
-
-    DecryptAllPossibleKeys();
-    RequestDevices();
 }
 
 void ChannelKeysManager::DecryptAllPossibleKeys(){
-    std::map<unsigned int, DeviceConn> deviceConnections;
+    std::unordered_map<unsigned int, DeviceConn> deviceConnections;
     std::vector<unsigned int> missingDeviceIds;
     for (const auto& ek : _encryptedKeys){
         if(deviceConnections.find(ek.SenderDeviceId) != deviceConnections.end()){
@@ -79,6 +80,13 @@ void ChannelKeysManager::DecryptAllPossibleKeys(){
     }
 
     for (auto itEk = _encryptedKeys.begin(); itEk != _encryptedKeys.end();){
+        auto ind = MakeKey(itEk->ChannelId, itEk->KeyVersion);
+        auto it = _keys.find(ind);
+        if(it != _keys.end()){
+            itEk++;
+            continue;
+        }
+
         auto itDev = deviceConnections.find(itEk->SenderDeviceId);
         if(itDev == deviceConnections.end()){
             itEk++;
@@ -105,11 +113,12 @@ void ChannelKeysManager::DecryptAllPossibleKeys(){
         ChannelKeyInfo info{};
         info.ChannelId = itEk->ChannelId;
         info.KeyVersion = itEk->KeyVersion;
+        info.HasBackup = false;
         memcpy(info.Key.data(), decrypted.data(), 32);
 
         printf("Key version: %d\n", info.KeyVersion);
         fflush(stdout);
-        _keys[MakeKey(info.ChannelId, info.KeyVersion)] = info;
+        _keys[ind] = info;
         itEk = _encryptedKeys.erase(itEk);
 
         Notify(info);
@@ -118,6 +127,7 @@ void ChannelKeysManager::DecryptAllPossibleKeys(){
     if(!missingDeviceIds.empty()){
         NetworkManager::RequestDevices(missingDeviceIds);
     }
+    BackupAllKeys();
 }
 
 void ChannelKeysManager::DecryptByDevice(const DeviceConn& deviceConn){
@@ -150,20 +160,21 @@ void ChannelKeysManager::DecryptByDevice(const DeviceConn& deviceConn){
 
         Notify(info);
     }
+    BackupAllKeys();
 }
 
-void ChannelKeysManager::RequestDevices(){
-    std::vector<unsigned int> _devicesToFetch;
-    for (const auto& ek : _encryptedKeys){
-        if(std::find(_devicesToFetch.begin(), _devicesToFetch.end(), ek.SenderDeviceId) != _devicesToFetch.end()){
-            continue;
-        }
-        DeviceConn conn;
-        if(!DevicesManager::GetConnection(ek.SenderDeviceId, conn)){
-            _devicesToFetch.emplace_back(ek.SenderDeviceId);
+void ChannelKeysManager::BackupAllKeys(){
+    std::vector<ChannelKeyInfo> keysToBackup;
+    for(auto& [_, key] : _keys){
+        if(!key.HasBackup){
+            keysToBackup.emplace_back(key);
+            key.HasBackup = true;
         }
     }
-    NetworkManager::RequestDevices(_devicesToFetch);
+
+    if(!keysToBackup.empty()){
+        NetworkManager::BackupChannelKeys(keysToBackup);
+    }
 }
 
 void ChannelKeysManager::Notify(const ChannelKeyInfo& channelKey){

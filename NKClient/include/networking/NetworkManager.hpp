@@ -2,7 +2,7 @@
 #include <cstddef>
 #include <string>
 #include <vector>
-#include <map>
+#include <unordered_map>
 #include "../structs.hpp"
 
 class NetworkManager{
@@ -31,6 +31,7 @@ public:
     static void RequestDM(const unsigned int userId);
     static void RequestChannelKeys(const unsigned int channelId);
     static void GenerateAndSendChannelKey(const unsigned int channelId, const std::vector<DeviceConn>& connections);
+    static void BackupChannelKeys(const std::vector<ChannelKeyInfo>& keyInfo);
 
     static void SendMessage(const unsigned int channelId, const std::string& payload, const ChannelKeyInfo& keyInfo);
     static void RequestChannelHistory(const unsigned int channelId, const unsigned int fromMessage, const unsigned int limit);

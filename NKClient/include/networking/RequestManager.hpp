@@ -1,6 +1,6 @@
 #pragma once
 #include <functional>
-#include <map>
+#include <unordered_map>
 
 typedef std::function<void(const unsigned char*, int)> RequestDelegate;
 typedef std::function<void()> OkRequestDelegate;
@@ -42,7 +42,7 @@ private:
     static void ApplyOk(unsigned char opcode);
     static void ApplyError(unsigned char opcode, int errNo);
 
-    static std::map<unsigned char, RequestDelegate> _requestSubscribers;
-    static std::map<unsigned char, OkRequestDelegate> _okRequestSubscribers;
-    static std::map<unsigned char, ErrorRequestDelegate> _errorRequestSubscribers;
+    static std::unordered_map<unsigned char, RequestDelegate> _requestSubscribers;
+    static std::unordered_map<unsigned char, OkRequestDelegate> _okRequestSubscribers;
+    static std::unordered_map<unsigned char, ErrorRequestDelegate> _errorRequestSubscribers;
 };

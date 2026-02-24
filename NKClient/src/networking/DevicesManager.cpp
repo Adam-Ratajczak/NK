@@ -13,7 +13,7 @@ std::array<unsigned char, 32> DevicesManager::DeviceX25519_secret = {};
 std::array<unsigned char, 32> DevicesManager::DeviceEd25519_pub = {};
 std::array<unsigned char, 64> DevicesManager::DeviceEd25519_secret = {};
 
-std::map<unsigned int, DeviceConn> DevicesManager::_deviceConnections;
+std::unordered_map<unsigned int, DeviceConn> DevicesManager::_deviceConnections;
 std::vector<DeviceConnDelegate> DevicesManager::_subscribers;
 unsigned int DevicesManager::GetDeviceId(const std::string& uname){
     const std::string cacheKey = "devid_" + uname;

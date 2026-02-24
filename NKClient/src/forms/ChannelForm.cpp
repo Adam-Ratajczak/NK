@@ -12,7 +12,7 @@
 DMChannelInfo ChannelForm::ChannelInfo;
 UserInfo ChannelForm::_recipent;
 ChannelKeyInfo ChannelForm::_channelKey;
-std::map<unsigned int, ChannelMessageInfo> ChannelForm::_messages;
+std::unordered_map<unsigned int, ChannelMessageInfo> ChannelForm::_messages;
 char ChannelForm::_inputBuf[512] = {};
 float ChannelForm::_lastTypingTime = 0.0f;
 bool ChannelForm::_isTyping = false;
@@ -89,12 +89,7 @@ void ChannelForm::Render()
             std::string text;
 
             if(msg.ChannelId == ChannelInfo.ChannelId){
-                if (msg.IsDecrypted) {
-                    text = std::string(msg.Plaintext.begin(), msg.Plaintext.end());
-                } else {
-                    text = "[encrypted]";
-                }
-
+                text = std::string(msg.Plaintext.begin(), msg.Plaintext.end());
                 ImGui::Text("[%u] %s", msg.SenderId, text.c_str());
             }
         }

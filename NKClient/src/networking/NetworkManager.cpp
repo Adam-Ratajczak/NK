@@ -283,6 +283,27 @@ void NetworkManager::GenerateAndSendChannelKey(const unsigned int channelId, con
     free(frame);
 }
 
+void NetworkManager::BackupChannelKeys(const std::vector<ChannelKeyInfo>& keyInfo){
+    NKChannelBackupKeyInput keys[NK_MAX_PAYLOAD_ARRAY_SIZE];
+    unsigned int index = 0;
+    for(const auto& key : keyInfo){
+        keys[index].channelId = key.ChannelId;
+        keys[index].keyVersion = key.KeyVersion;
+        memcpy(keys[index].channelKey, key.Key.data(), key.Key.size());
+        index++;
+    }
+    
+    unsigned int frameSize = 0;
+    unsigned char* frame = nk_encode_channel_backup_keys(keys, keyInfo.size(), UserManager::UMK.data(),
+                                                         SessionManager::TxKey.data(), &frameSize);
+    if (!frame)
+        return;
+
+    Send(frame, (size_t)frameSize);
+
+    free(frame);
+}
+
 void NetworkManager::SendMessage(const unsigned int channelId, const std::string& payload, const ChannelKeyInfo& keyInfo){
     unsigned int frameSize = 0;
     unsigned char* frame = nk_encode_channel_message_send(channelId, keyInfo.KeyVersion, (unsigned char*)payload.data(), payload.size(), keyInfo.Key.data(), 

@@ -1,6 +1,6 @@
 #pragma once
 #include "../structs.hpp"
-#include <set>
+#include <unordered_set>
 
 class RequestsForm{
 public:
@@ -12,7 +12,7 @@ public:
 private:
     static void AddFriendRequest(const FriendRequestInfo& friendRequestInfo);
     static void AddUserInfo(const UserInfo& userInfo);
-    static std::set<int> _userIds;
-    static std::map<int, FriendRequestInfo> _friendRequests;
-    static std::map<int, UserInfo> _users;
+    static std::unordered_set<int> _userIds;
+    static std::unordered_map<int, FriendRequestInfo> _friendRequests;
+    static std::unordered_map<int, UserInfo> _users;
 };

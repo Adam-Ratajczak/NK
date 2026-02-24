@@ -11,9 +11,9 @@
 #include "forms/LoginForm.hpp"
 #include "nk_protocol.h"
 
-std::map<unsigned char, RequestDelegate> RequestManager::_requestSubscribers;
-std::map<unsigned char, OkRequestDelegate> RequestManager::_okRequestSubscribers;
-std::map<unsigned char, ErrorRequestDelegate> RequestManager::_errorRequestSubscribers;
+std::unordered_map<unsigned char, RequestDelegate> RequestManager::_requestSubscribers;
+std::unordered_map<unsigned char, OkRequestDelegate> RequestManager::_okRequestSubscribers;
+std::unordered_map<unsigned char, ErrorRequestDelegate> RequestManager::_errorRequestSubscribers;
 void RequestManager::Register(){
     SubscribeRequest(NK_OPCODE_HELLO, &RequestManager::ProcessHelloRequest);
     SubscribeRequest(NK_OPCODE_OK, &RequestManager::ProcessOkRequest);
@@ -336,8 +336,8 @@ void RequestManager::ProcessSyncChannelKeysRequest(const unsigned char* data, in
         
         printf("ProcessSyncChannelKeysRequest success\n");
         fflush(stdout);
-        ChannelKeysManager::LoadDeviceEncryptedKeys(encryptedDevKeys);
         ChannelKeysManager::LoadBackupEncryptedKeys(encryptedBackupKeys);
+        ChannelKeysManager::LoadDeviceEncryptedKeys(encryptedDevKeys);
     }else{
         printf("ProcessSyncChannelKeysRequest error\n");
         fflush(stdout);
@@ -349,19 +349,20 @@ void RequestManager::ProcessChannelMessageDeliverRequest(const unsigned char* da
     unsigned int channelId;
     NKChannelMessageData message;
     if(nk_decode_channel_message_deliver(data, len, SessionManager::RxKey.data(), &channelId, &message) == 0){
-        ChannelMessageInfo messageInfo;
+        ChannelEncryptedMessageInfo messageInfo;
         messageInfo.ChannelId = channelId;
         messageInfo.KeyVersion = message.keyVersion;
         messageInfo.MessageId = message.messageId;
         messageInfo.SenderDeviceId = message.senderDeviceId;
         messageInfo.SenderId = message.senderId;
-        messageInfo.IsDecrypted = false;
         messageInfo.Time = std::chrono::system_clock::time_point(std::chrono::seconds(message.updateTime));
         messageInfo.Ciphertext.resize(message.payloadSize);
         memcpy(messageInfo.Ciphertext.data(), message.payload, messageInfo.Ciphertext.size());
+        messageInfo.Signed.resize(message.signedSize);
+        memcpy(messageInfo.Signed.data(), message.signedBuf, messageInfo.Signed.size());
         messageInfo.Signature.resize(NK_ED25519_SIG_SIZE);
         memcpy(messageInfo.Signature.data(), message.sig, messageInfo.Signature.size());
-        ChannelMessagesManager::LoadMessages(std::vector<ChannelMessageInfo>{ messageInfo });
+        ChannelMessagesManager::LoadEncryptedMessages(std::vector<ChannelEncryptedMessageInfo>{ messageInfo });
     }else {
         ApplyError(NK_OPCODE_CHANNEL_MESSAGE_DELIVER, NK_ERROR_INVALID_FRAME);
     }
@@ -374,23 +375,24 @@ void RequestManager::ProcessSyncChannelHistoryRequest(const unsigned char* data,
     unsigned short messagesLen;
     if(nk_decode_sync_channel_history(data, len, SessionManager::RxKey.data(), &channelId, messages, &messagesLen) == 0){
         printf("len = %d\n", messagesLen);
-        std::vector<ChannelMessageInfo> messageInfo;
+        std::vector<ChannelEncryptedMessageInfo> messageInfo;
         for(int i = 0; i < messagesLen; i++){
-            ChannelMessageInfo message;
+            ChannelEncryptedMessageInfo message;
             message.ChannelId = channelId;
             message.KeyVersion = messages[i].keyVersion;
             message.MessageId = messages[i].messageId;
             message.SenderDeviceId = messages[i].senderDeviceId;
             message.SenderId = messages[i].senderId;
-            message.IsDecrypted = false;
             message.Time = std::chrono::system_clock::time_point(std::chrono::seconds(messages[i].updateTime));
             message.Ciphertext.resize(messages[i].payloadSize);
             memcpy(message.Ciphertext.data(), messages[i].payload, message.Ciphertext.size());
+            message.Signed.resize(messages[i].signedSize);
+            memcpy(message.Signed.data(), messages[i].signedBuf, message.Signed.size());
             message.Signature.resize(NK_ED25519_SIG_SIZE);
             memcpy(message.Signature.data(), messages[i].sig, message.Signature.size());
             messageInfo.emplace_back(message);
         }
-        ChannelMessagesManager::LoadMessages(messageInfo);
+        ChannelMessagesManager::LoadEncryptedMessages(messageInfo);
     }else{
         printf("ProcessSyncChannelHistoryRequest error\n");
         ApplyError(NK_OPCODE_SYNC_CHANNEL_HISTORY, NK_ERROR_INVALID_FRAME);

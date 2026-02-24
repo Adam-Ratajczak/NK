@@ -1,73 +1,164 @@
 #include "networking/ChannelMessagesManager.hpp"
 #include "networking/ChannelKeysManager.hpp"
+#include "networking/NetworkManager.hpp"
 #include "networking/DevicesManager.hpp"
 #include "nk_protocol.h"
 
-std::map<unsigned int, ChannelMessageInfo> ChannelMessagesManager::_messages;
+std::vector<ChannelEncryptedMessageInfo> ChannelMessagesManager::_encryptedMessages;
+std::unordered_map<unsigned int, ChannelMessageInfo> ChannelMessagesManager::_messages;
 std::vector<ChannelMessageInfoDelegate> ChannelMessagesManager::_subscribers;
 
 void ChannelMessagesManager::Register(){
     ChannelKeysManager::Subscribe(&ChannelMessagesManager::OnKeysUpdated);
+    DevicesManager::Subscribe(&ChannelMessagesManager::OnDevicesUpdated);
 }
 void ChannelMessagesManager::Subscribe(ChannelMessageInfoDelegate func){
     _subscribers.push_back(func);
 }
 
-void ChannelMessagesManager::LoadMessages(const std::vector<ChannelMessageInfo>& messages){
-    for (auto msg : messages){
-        printf("Message ID: %d\n", msg.MessageId);
+void ChannelMessagesManager::LoadEncryptedMessages(const std::vector<ChannelEncryptedMessageInfo>& messages){
+    printf("Messages: %d\n", messages.size());
+    fflush(stdout);
+    _encryptedMessages.insert(_encryptedMessages.end(), messages.begin(), messages.end());
+    DecryptAllPossibleMessages();
+}
+
+void ChannelMessagesManager::DecryptAllPossibleMessages(){
+    printf("Decrypting messages\n");
+    fflush(stdout);
+    std::unordered_map<unsigned int, DeviceConn> deviceConnections;
+    std::vector<unsigned int> missingDeviceIds;
+    for (const auto& msg : _encryptedMessages){
+        if(deviceConnections.find(msg.SenderDeviceId) != deviceConnections.end()){
+            continue;
+        }
+        DeviceConn conn;
+        if(DevicesManager::GetConnection(msg.SenderDeviceId, conn)){
+            deviceConnections[msg.SenderDeviceId] = conn;
+        }else{
+            auto it = std::find(missingDeviceIds.begin(), missingDeviceIds.end(), msg.SenderDeviceId);
+            if(it == missingDeviceIds.end()){
+                missingDeviceIds.emplace_back(msg.SenderDeviceId);
+            }
+        }
+    }
+
+    for (auto itEm = _encryptedMessages.begin(); itEm != _encryptedMessages.end();){
+        printf("Decrypting messages loop\n");
         fflush(stdout);
-        if (!VerifyMessage(msg)) {
+        auto itDev = deviceConnections.find(itEm->SenderDeviceId);
+        if(itDev == deviceConnections.end()){
+            itEm++;
+            continue;
+        }
+
+        ChannelKeyInfo key;
+        if (!ChannelKeysManager::GetChannelKey(itEm->ChannelId, itEm->KeyVersion, key)){
+            itEm++;
+            continue;
+        }
+        
+        if (!VerifyMessage(*itEm, itDev->second)) {
+            itEm++;
             printf("message verification failed\n");
             fflush(stdout);
             continue;
         }
-        TryDecrypt(msg);
 
-        _messages[msg.MessageId] = msg;
-        Notify(msg);
+        ChannelMessageInfo msg;
+        if(TryDecryptWithKey(*itEm, key, msg)){
+            _messages[msg.MessageId] = msg;
+            itEm = _encryptedMessages.erase(itEm);
+            Notify(msg);
+        }else{
+            itEm++;
+        }
+    }
+
+    if(!missingDeviceIds.empty()){
+        NetworkManager::RequestDevices(missingDeviceIds);
     }
 }
 
-void ChannelMessagesManager::TryDecrypt(ChannelMessageInfo& msg){
-    if (msg.IsDecrypted)
-        return;
-
-    ChannelKeyInfo key;
-
-    if (!ChannelKeysManager::GetChannelKey(msg.ChannelId, msg.KeyVersion, key))
-        return;
-
-    TryDecryptWithKey(msg, key);
-}
-
-void ChannelMessagesManager::TryDecryptWithKey(ChannelMessageInfo& msg, const ChannelKeyInfo& key){
-    std::vector<unsigned char> plain(msg.Ciphertext.size());
+bool ChannelMessagesManager::TryDecryptWithKey(const ChannelEncryptedMessageInfo& enMsg, const ChannelKeyInfo& key, ChannelMessageInfo& msg){
+    std::vector<unsigned char> plain(enMsg.Ciphertext.size());
     unsigned int outSize = 0;
 
-    if (nk_decrypt_payload(key.Key.data(), msg.Ciphertext.data(), (unsigned int)msg.Ciphertext.size(), plain.data(), &outSize) != 0)
+    if (nk_decrypt_payload(key.Key.data(), enMsg.Ciphertext.data(), (unsigned int)enMsg.Ciphertext.size(), plain.data(), &outSize) != 0)
     {
-        return;
+        return false;
     }
 
     plain.resize(outSize);
 
+    msg.ChannelId = enMsg.ChannelId;
+    msg.MessageId = enMsg.MessageId;
+    msg.SenderId = enMsg.SenderId;
+    msg.Time = enMsg.Time;
     msg.Plaintext = std::move(plain);
-    msg.IsDecrypted = true;
+
+    return true;
 }
 
 void ChannelMessagesManager::OnKeysUpdated(const ChannelKeyInfo& key){
-    for (auto& [_, msg] : _messages){
-        if (!msg.IsDecrypted && msg.ChannelId == key.ChannelId && msg.KeyVersion == key.KeyVersion){
-            if (!VerifyMessage(msg)) {
+    for (auto itEm = _encryptedMessages.begin(); itEm != _encryptedMessages.end();){
+        printf("Decrypting messages by key loop\n");
+        fflush(stdout);
+        if (itEm->ChannelId == key.ChannelId && itEm->KeyVersion == key.KeyVersion){
+            DeviceConn conn;
+            if(!DevicesManager::GetConnection(itEm->SenderDeviceId, conn)){
+                itEm++;
+                continue;
+            }
+            if (!VerifyMessage(*itEm, conn)) {
+                itEm++;
                 printf("message verification failed\n");
                 fflush(stdout);
                 continue;
             }
-            TryDecryptWithKey(msg, key);
 
-            if (msg.IsDecrypted)
+            ChannelMessageInfo msg;
+            if(TryDecryptWithKey(*itEm, key, msg)){
+                _messages[msg.MessageId] = msg;
+                itEm = _encryptedMessages.erase(itEm);
                 Notify(msg);
+            }else{
+                itEm++;
+            }
+        }else{
+            itEm++;
+        }
+    }
+}
+
+void ChannelMessagesManager::OnDevicesUpdated(const DeviceConn& conn){
+    for (auto itEm = _encryptedMessages.begin(); itEm != _encryptedMessages.end();){
+        printf("Decrypting messages by device loop\n");
+        fflush(stdout);
+        if (itEm->SenderDeviceId == conn.DeviceId){
+            if (!VerifyMessage(*itEm, conn)) {
+                itEm++;
+                printf("message verification failed\n");
+                fflush(stdout);
+                continue;
+            }
+            
+            ChannelKeyInfo key;
+            if (!ChannelKeysManager::GetChannelKey(itEm->ChannelId, itEm->KeyVersion, key)){
+                itEm++;
+                continue;
+            }
+
+            ChannelMessageInfo msg;
+            if(TryDecryptWithKey(*itEm, key, msg)){
+                _messages[msg.MessageId] = msg;
+                itEm = _encryptedMessages.erase(itEm);
+                Notify(msg);
+            }else{
+                itEm++;
+            }
+        }else{
+            itEm++;
         }
     }
 }
@@ -91,15 +182,7 @@ void ChannelMessagesManager::Reset(){
     _subscribers.clear();
 }
 
-bool ChannelMessagesManager::VerifyMessage(ChannelMessageInfo& msg) {
-    return true;
-    DeviceConn conn;
-
-    if (!DevicesManager::GetConnection(msg.SenderDeviceId, conn)) {
-        printf("No valid connection\n");
-        fflush(stdout);
-        return false;
-    }
+bool ChannelMessagesManager::VerifyMessage(const ChannelEncryptedMessageInfo& msg, const DeviceConn& conn) {
     if(msg.SenderId != conn.OwnerId){
         printf("Invalid ownership\n");
         fflush(stdout);
@@ -112,7 +195,7 @@ bool ChannelMessagesManager::VerifyMessage(ChannelMessageInfo& msg) {
         return false;
     }
 
-    if (nk_verify_signature(conn.Ed25519_pub.data(), msg.Ciphertext.data(), msg.Ciphertext.size(), msg.Signature.data()) != 0)
+    if (nk_verify_signature(conn.Ed25519_pub.data(), msg.Signed.data(), msg.Signed.size(), msg.Signature.data()) != 0)
     {
         printf("Sig verify failed: %x %x %x %x\n", msg.Signature[0], msg.Signature[1], msg.Signature[2], msg.Signature[3]);
         fflush(stdout);

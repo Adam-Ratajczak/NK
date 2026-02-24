@@ -1,5 +1,5 @@
 #pragma once
-#include <map>
+#include <unordered_map>
 #include "../structs.hpp"
 
 class UserManager{
@@ -28,6 +28,6 @@ private:
     static void Notify(const UserInfo& user); 
     static void OnLoginError(int errNo);
 
-    static std::map<unsigned int, UserInfo> _users;
+    static std::unordered_map<unsigned int, UserInfo> _users;
     static std::vector<UserInfoDelegate> _subscribers;
 };

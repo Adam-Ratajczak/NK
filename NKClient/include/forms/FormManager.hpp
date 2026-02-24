@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-#include <map>
+#include <unordered_map>
 #include <functional>
 
 typedef std::function<void()> FormActionDelegate;
@@ -20,6 +20,6 @@ public:
     static std::string CurrentForm();
 private:
     static std::string _toRender; 
-    static std::map<std::string, FormActionDelegate> _openSubscribers;
-    static std::map<std::string, FormActionDelegate> _renderSubscribers;
+    static std::unordered_map<std::string, FormActionDelegate> _openSubscribers;
+    static std::unordered_map<std::string, FormActionDelegate> _renderSubscribers;
 };

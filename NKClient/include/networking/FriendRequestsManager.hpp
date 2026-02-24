@@ -1,5 +1,5 @@
 #pragma once
-#include <map>
+#include <unordered_map>
 #include "../structs.hpp"
 
 class FriendRequestsManager{
@@ -15,6 +15,6 @@ public:
 private:
     static void Notify(const FriendRequestInfo& friendRequest); 
 
-    static std::map<unsigned int, FriendRequestInfo> _friendRequests;
+    static std::unordered_map<unsigned int, FriendRequestInfo> _friendRequests;
     static std::vector<FriendRequestInfoDelegate> _subscribers;
 };

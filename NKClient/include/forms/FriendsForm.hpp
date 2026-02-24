@@ -1,6 +1,6 @@
 #pragma once
 #include "../structs.hpp"
-#include <set>
+#include <unordered_set>
 
 class FriendsForm{
 public:
@@ -15,7 +15,7 @@ private:
     static void OnDMChannelInfo(const DMChannelInfo& DMChannel);
     static void OnOkRequest();
     static void OnErrorRequest(int errNo);
-    static std::set<int> _friendUserIds;
-    static std::map<int, UserInfo> _friendUsers;
+    static std::unordered_set<int> _friendUserIds;
+    static std::unordered_map<int, UserInfo> _friendUsers;
     static std::string _errorMsg;
 };

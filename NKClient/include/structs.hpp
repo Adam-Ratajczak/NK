@@ -4,7 +4,7 @@
 #include <functional>
 #include <vector>
 #include <array>
-#include <map>
+#include <unordered_map>
 
 struct UserInfo{
     unsigned int UserId;
@@ -91,10 +91,11 @@ struct ChannelKeyInfo{
     unsigned int ChannelId;
     unsigned int KeyVersion;
     std::array<unsigned char, 32> Key;
+    bool HasBackup;
 };
 typedef std::function<void(const ChannelKeyInfo&)> ChannelKeyInfoDelegate;
 
-struct ChannelMessageInfo {
+struct ChannelEncryptedMessageInfo {
     unsigned int ChannelId;
     unsigned int MessageId;
     unsigned int SenderId;
@@ -102,8 +103,15 @@ struct ChannelMessageInfo {
     unsigned int KeyVersion;
     std::chrono::system_clock::time_point Time;
     std::vector<unsigned char> Ciphertext;
+    std::vector<unsigned char> Signed;
     std::vector<unsigned char> Signature;
+};
+
+struct ChannelMessageInfo {
+    unsigned int ChannelId;
+    unsigned int MessageId;
+    unsigned int SenderId;
+    std::chrono::system_clock::time_point Time;
     std::vector<unsigned char> Plaintext;
-    bool IsDecrypted = false;
 };
 typedef std::function<void(const ChannelMessageInfo&)> ChannelMessageInfoDelegate;
