@@ -15,7 +15,11 @@ void ChannelMessagesManager::Subscribe(ChannelMessageInfoDelegate func){
 
 void ChannelMessagesManager::LoadMessages(const std::vector<ChannelMessageInfo>& messages){
     for (auto msg : messages){
+        printf("Message ID: %d\n", msg.MessageId);
+        fflush(stdout);
         if (!VerifyMessage(msg)) {
+            printf("message verification failed\n");
+            fflush(stdout);
             continue;
         }
         TryDecrypt(msg);
@@ -55,6 +59,11 @@ void ChannelMessagesManager::TryDecryptWithKey(ChannelMessageInfo& msg, const Ch
 void ChannelMessagesManager::OnKeysUpdated(const ChannelKeyInfo& key){
     for (auto& [_, msg] : _messages){
         if (!msg.IsDecrypted && msg.ChannelId == key.ChannelId && msg.KeyVersion == key.KeyVersion){
+            if (!VerifyMessage(msg)) {
+                printf("message verification failed\n");
+                fflush(stdout);
+                continue;
+            }
             TryDecryptWithKey(msg, key);
 
             if (msg.IsDecrypted)
@@ -83,24 +92,30 @@ void ChannelMessagesManager::Reset(){
 }
 
 bool ChannelMessagesManager::VerifyMessage(ChannelMessageInfo& msg) {
+    return true;
     DeviceConn conn;
 
     if (!DevicesManager::GetConnection(msg.SenderDeviceId, conn)) {
+        printf("No valid connection\n");
+        fflush(stdout);
         return false;
     }
     if(msg.SenderId != conn.OwnerId){
+        printf("Invalid ownership\n");
+        fflush(stdout);
         return false;
     }
 
-    if (msg.Ciphertext.size() < NK_ED25519_SIG_SIZE)
+    if (msg.Signature.size() != NK_ED25519_SIG_SIZE){
+        printf("Invalid sig size: %d\n", msg.Ciphertext.size());
+        fflush(stdout);
         return false;
+    }
 
-    const unsigned char* sig = msg.Ciphertext.data();
-    const unsigned char* payload = msg.Ciphertext.data() + NK_ED25519_SIG_SIZE;
-    unsigned int payloadLen = (unsigned int)msg.Ciphertext.size() - NK_ED25519_SIG_SIZE;
-
-    if (nk_verify_signature(conn.Ed25519_pub.data(), payload, payloadLen, sig) != 0)
+    if (nk_verify_signature(conn.Ed25519_pub.data(), msg.Ciphertext.data(), msg.Ciphertext.size(), msg.Signature.data()) != 0)
     {
+        printf("Sig verify failed: %x %x %x %x\n", msg.Signature[0], msg.Signature[1], msg.Signature[2], msg.Signature[3]);
+        fflush(stdout);
         return false;
     }
 

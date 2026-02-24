@@ -92,14 +92,16 @@ func receiveOpcodeChannelMessageSend(client *ClientConn, data []byte) {
 	}
 
 	goPayload := C.GoBytes(unsafe.Pointer(&payload[0]), C.int(payloadSize))
+	goSig := C.GoBytes(unsafe.Pointer(&sig[0]), C.int((int)(C.NK_ED25519_SIG_SIZE)))
 
 	res, err := db.Exec(`
-		INSERT INTO messages (channel_id, sender_id, sender_device_id, payload, key_version, created_at)
-		VALUES (?, ?, ?, ?, ?, strftime('%s','now'))`,
+		INSERT INTO messages (channel_id, sender_id, sender_device_id, payload, sig, key_version, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, strftime('%s','now'))`,
 		int(channelID),
 		client.userID,
 		client.deviceID,
 		goPayload,
+		goSig,
 		int(keyVersion),
 	)
 	if err != nil {
@@ -119,6 +121,7 @@ func receiveOpcodeChannelMessageSend(client *ClientConn, data []byte) {
 	msg.updateTime = C.ulonglong(time.Now().Unix())
 
 	C.memcpy(unsafe.Pointer(&msg.payload[0]), unsafe.Pointer(&payload[0]), C.size_t(payloadSize))
+	C.memcpy(unsafe.Pointer(&msg.sig[0]), unsafe.Pointer(&sig[0]), C.size_t(C.NK_ED25519_SIG_SIZE))
 
 	broadcastChannelMessage(int(channelID), &msg)
 }
@@ -184,7 +187,7 @@ func receiveOpcodeSyncChannelHistoryRequest(client *ClientConn, data []byte) {
 	var err error
 	if fromID == C.NK_INVALID_MESSAGE {
 		rows, err = db.Query(`
-			SELECT id, sender_id, sender_device_id, payload, key_version, created_at
+			SELECT id, sender_id, sender_device_id, payload, sig, key_version, created_at
 			FROM messages
 			WHERE channel_id=?
 			ORDER BY id DESC
@@ -198,7 +201,7 @@ func receiveOpcodeSyncChannelHistoryRequest(client *ClientConn, data []byte) {
 		defer rows.Close()
 	} else {
 		rows, err = db.Query(`
-			SELECT id, sender_id, sender_device_id, payload, key_version, created_at
+			SELECT id, sender_id, sender_device_id, payload, sig, key_version, created_at
 			FROM messages
 			WHERE channel_id=? AND id>? 
 			ORDER BY id DESC
@@ -218,9 +221,15 @@ func receiveOpcodeSyncChannelHistoryRequest(client *ClientConn, data []byte) {
 	for rows.Next() {
 		var id, senderID, senderDeviceID, kv int
 		var payload []byte
+		var sig []byte
 		var ts int64
 
-		if rows.Scan(&id, &senderID, &senderDeviceID, &payload, &kv, &ts) != nil {
+		if rows.Scan(&id, &senderID, &senderDeviceID, &payload, &sig, &kv, &ts) != nil {
+			continue
+		}
+
+		if len(payload) == 0 || len(payload) > int(C.NK_MAX_MESSAGE_SIZE) {
+			fmt.Println("invalid payload size:", len(payload))
 			continue
 		}
 
@@ -233,7 +242,10 @@ func receiveOpcodeSyncChannelHistoryRequest(client *ClientConn, data []byte) {
 		m.updateTime = C.ulonglong(ts)
 		m.payloadSize = C.ushort(len(payload))
 
-		copy((*[C.NK_MAX_MESSAGE_SIZE]byte)(unsafe.Pointer(&m.payload[0]))[:], payload)
+		dst := (*[C.NK_MAX_MESSAGE_SIZE]byte)(unsafe.Pointer(&m.payload[0]))[:len(payload)]
+		copy(dst, payload)
+		dst = (*[C.NK_ED25519_SIG_SIZE]byte)(unsafe.Pointer(&m.sig[0]))[:len(sig)]
+		copy(dst, sig)
 
 		outLen++
 		if outLen >= C.NK_MAX_PAYLOAD_ARRAY_SIZE {

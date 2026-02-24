@@ -282,6 +282,8 @@ void RequestManager::ProcessChannelSubmitKeyResultRequest(const unsigned char* d
     unsigned int channelId, keyVersion; 
     unsigned char umkEncryptedKey[NK_MAX_ENCRYPTED_KEY_SIZE];
     unsigned short umkKeySize;
+    printf("ProcessChannelSubmitKeyResultRequest\n");
+    fflush(stdout);
     if(nk_decode_channel_submit_key_result(data, len, SessionManager::RxKey.data(), &channelId, &keyVersion, umkEncryptedKey, &umkKeySize) == 0){
         BackupKeyEncryptedChannelKeyInfo keyInfo;
         keyInfo.ChannelId = channelId;
@@ -289,8 +291,12 @@ void RequestManager::ProcessChannelSubmitKeyResultRequest(const unsigned char* d
         keyInfo.EncryptedKey.resize(umkKeySize);
         memcpy(keyInfo.EncryptedKey.data(), umkEncryptedKey, umkKeySize);
         ChannelKeysManager::LoadBackupEncryptedKeys(std::vector<BackupKeyEncryptedChannelKeyInfo>{ keyInfo });
+        printf("ProcessChannelSubmitKeyResultRequest success\n");
+        fflush(stdout);
     }else{
         ApplyError(NK_OPCODE_CHANNEL_SUBMIT_KEY_RESULT, NK_ERROR_INVALID_FRAME);
+        printf("ProcessChannelSubmitKeyResultRequest fail\n");
+        fflush(stdout);
     }
 }
 
@@ -299,6 +305,9 @@ void RequestManager::ProcessSyncChannelKeysRequest(const unsigned char* data, in
     unsigned short deviceKeysLen, backupKeysLen;
     NKChannelDeviceKeyData deviceKeys[NK_MAX_PAYLOAD_ARRAY_SIZE];
     NKChannelBackupKeyData backupKeys[NK_MAX_PAYLOAD_ARRAY_SIZE];
+
+    printf("ProcessSyncChannelKeysRequest\n");
+    fflush(stdout);
 
     std::vector<DeviceKeyEncryptedChannelKeyInfo> encryptedDevKeys;
     std::vector<BackupKeyEncryptedChannelKeyInfo> encryptedBackupKeys;
@@ -325,9 +334,13 @@ void RequestManager::ProcessSyncChannelKeysRequest(const unsigned char* data, in
             encryptedBackupKeys.emplace_back(backupKeyInfo);
         }
         
+        printf("ProcessSyncChannelKeysRequest success\n");
+        fflush(stdout);
         ChannelKeysManager::LoadDeviceEncryptedKeys(encryptedDevKeys);
         ChannelKeysManager::LoadBackupEncryptedKeys(encryptedBackupKeys);
     }else{
+        printf("ProcessSyncChannelKeysRequest error\n");
+        fflush(stdout);
         ApplyError(NK_OPCODE_SYNC_CHANNEL_KEYS, NK_ERROR_INVALID_FRAME);
     }
 }
@@ -335,7 +348,7 @@ void RequestManager::ProcessSyncChannelKeysRequest(const unsigned char* data, in
 void RequestManager::ProcessChannelMessageDeliverRequest(const unsigned char* data, int len){
     unsigned int channelId;
     NKChannelMessageData message;
-    if(nk_decode_channel_message_deliver(data, len, SessionManager::RxKey.data(), &channelId, &message)){
+    if(nk_decode_channel_message_deliver(data, len, SessionManager::RxKey.data(), &channelId, &message) == 0){
         ChannelMessageInfo messageInfo;
         messageInfo.ChannelId = channelId;
         messageInfo.KeyVersion = message.keyVersion;
@@ -346,15 +359,21 @@ void RequestManager::ProcessChannelMessageDeliverRequest(const unsigned char* da
         messageInfo.Time = std::chrono::system_clock::time_point(std::chrono::seconds(message.updateTime));
         messageInfo.Ciphertext.resize(message.payloadSize);
         memcpy(messageInfo.Ciphertext.data(), message.payload, messageInfo.Ciphertext.size());
+        messageInfo.Signature.resize(NK_ED25519_SIG_SIZE);
+        memcpy(messageInfo.Signature.data(), message.sig, messageInfo.Signature.size());
         ChannelMessagesManager::LoadMessages(std::vector<ChannelMessageInfo>{ messageInfo });
+    }else {
+        ApplyError(NK_OPCODE_CHANNEL_MESSAGE_DELIVER, NK_ERROR_INVALID_FRAME);
     }
 }
 
 void RequestManager::ProcessSyncChannelHistoryRequest(const unsigned char* data, int len){
     unsigned int channelId;
-    NKChannelMessageData messages[NK_MAX_PAYLOAD_ARRAY_SIZE];
+    NKChannelMessageData* messages = new NKChannelMessageData[NK_MAX_PAYLOAD_ARRAY_SIZE];
+    printf("ProcessSyncChannelHistoryRequest\n");
     unsigned short messagesLen;
-    if(nk_decode_sync_channel_history(data, len, SessionManager::RxKey.data(), &channelId, messages, &messagesLen) != 0){
+    if(nk_decode_sync_channel_history(data, len, SessionManager::RxKey.data(), &channelId, messages, &messagesLen) == 0){
+        printf("len = %d\n", messagesLen);
         std::vector<ChannelMessageInfo> messageInfo;
         for(int i = 0; i < messagesLen; i++){
             ChannelMessageInfo message;
@@ -366,12 +385,18 @@ void RequestManager::ProcessSyncChannelHistoryRequest(const unsigned char* data,
             message.IsDecrypted = false;
             message.Time = std::chrono::system_clock::time_point(std::chrono::seconds(messages[i].updateTime));
             message.Ciphertext.resize(messages[i].payloadSize);
+            memcpy(message.Ciphertext.data(), messages[i].payload, message.Ciphertext.size());
+            message.Signature.resize(NK_ED25519_SIG_SIZE);
+            memcpy(message.Signature.data(), messages[i].sig, message.Signature.size());
             messageInfo.emplace_back(message);
         }
         ChannelMessagesManager::LoadMessages(messageInfo);
     }else{
+        printf("ProcessSyncChannelHistoryRequest error\n");
         ApplyError(NK_OPCODE_SYNC_CHANNEL_HISTORY, NK_ERROR_INVALID_FRAME);
     }
+
+    delete messages;
 }
 
 void RequestManager::ProcessChannelTypingBroadcastRequest(const unsigned char* data, int len){
@@ -395,7 +420,7 @@ void RequestManager::ApplyOk(unsigned char opcode){
 }
 
 void RequestManager::ApplyError(unsigned char opcode, int errNo){
-    printf("Error opcode %x, errNo %x", opcode, errNo);
+    printf("Error opcode %x, errNo %x\n", opcode, errNo);
     fflush(stdout);
     auto it = _errorRequestSubscribers.find(opcode);
     if (it != _errorRequestSubscribers.end() && it->second) {

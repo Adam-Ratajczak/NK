@@ -42,4 +42,5 @@ private:
     static RecipentsInfo _recipentsSyncing;
     static std::vector<unsigned int> _usersWithoutDeviceConnectionsSyncing;
     static std::vector<DeviceConn> _deviceConnectionsSyncing;
+    static bool _isGenerating;
 };

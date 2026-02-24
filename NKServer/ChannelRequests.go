@@ -254,12 +254,14 @@ func receiveOpcodeChannelSubmitKey(client *ClientConn, data []byte) {
 	).Scan(&exists)
 
 	if err != nil {
+		fmt.Println(err.Error())
 		sendError(client, int(C.NK_OPCODE_CHANNEL_SUBMIT_KEY), int(C.NK_ERROR_PERMISSION_DENIED))
 		return
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
+		fmt.Println(err.Error())
 		sendError(client, int(C.NK_OPCODE_CHANNEL_SUBMIT_KEY), int(C.NK_ERROR_INTERNAL))
 		return
 	}
@@ -277,6 +279,7 @@ func receiveOpcodeChannelSubmitKey(client *ClientConn, data []byte) {
 
 	var umkBytes []byte
 	if err != nil {
+		fmt.Println(err.Error())
 		tx.Rollback()
 		goto fail
 	}
@@ -301,6 +304,7 @@ func receiveOpcodeChannelSubmitKey(client *ClientConn, data []byte) {
 		)
 
 		if err != nil {
+			fmt.Println(err.Error())
 			tx.Rollback()
 			goto fail
 		}
@@ -319,6 +323,7 @@ func receiveOpcodeChannelSubmitKey(client *ClientConn, data []byte) {
 	)
 
 	if err != nil {
+		fmt.Println(err.Error())
 		tx.Rollback()
 		goto fail
 	}
@@ -336,9 +341,11 @@ func receiveOpcodeChannelSubmitKey(client *ClientConn, data []byte) {
 	)
 
 	if reply == nil {
+		fmt.Printf("submit key NK_ERROR_INTERNAL\n")
 		sendError(client, int(C.NK_OPCODE_SYNC_CHANNEL_KEYS), int(C.NK_ERROR_INTERNAL))
 		return
 	}
+	fmt.Printf("Sending channel key\n")
 
 	goReply = C.GoBytes(unsafe.Pointer(reply), C.int(replySize))
 	client.conn.WriteMessage(websocket.BinaryMessage, goReply)
@@ -403,6 +410,7 @@ fail:
 }
 
 func receiveOpcodeSyncChannelKeysRequest(client *ClientConn, data []byte) {
+	fmt.Println("receiveOpcodeSyncChannelKeysRequest")
 	if !ensureDeviceReady(client, int(C.NK_OPCODE_SYNC_CHANNEL_KEYS_REQUEST)) {
 		return
 	}
@@ -415,6 +423,7 @@ func receiveOpcodeSyncChannelKeysRequest(client *ClientConn, data []byte) {
 		&client.rxKey[0],
 		&channelID,
 	) != 0 {
+		fmt.Println("receiveOpcodeSyncChannelKeysRequest NK_ERROR_INVALID_FRAME")
 		sendError(client, int(C.NK_OPCODE_SYNC_CHANNEL_KEYS_REQUEST), int(C.NK_ERROR_INVALID_FRAME))
 		return
 	}
@@ -496,6 +505,7 @@ func receiveOpcodeSyncChannelKeysRequest(client *ClientConn, data []byte) {
 	}
 
 	if bLen == 0 {
+		fmt.Println("Nothing to send")
 		sendError(client, int(C.NK_OPCODE_SYNC_CHANNEL_KEYS_REQUEST), int(C.NK_ERROR_NOTHING_TO_SEND))
 	}
 
@@ -513,6 +523,7 @@ func receiveOpcodeSyncChannelKeysRequest(client *ClientConn, data []byte) {
 		sendError(client, int(C.NK_OPCODE_SYNC_CHANNEL_KEYS), int(C.NK_ERROR_INTERNAL))
 		return
 	}
+	fmt.Printf("Sending %d channel keys\n", bLen)
 
 	goReply := C.GoBytes(unsafe.Pointer(reply), C.int(replySize))
 	client.conn.WriteMessage(websocket.BinaryMessage, goReply)

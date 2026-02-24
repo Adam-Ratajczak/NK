@@ -416,6 +416,7 @@ func main() {
 			sender_device_id INTEGER,
 
 			payload BLOB NOT NULL,
+			sig BLOB NOT NULL,
 			key_version INTEGER,
 
 			created_at INTEGER

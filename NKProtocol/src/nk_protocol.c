@@ -9,7 +9,7 @@ void nk_get_version(int ver[4]){
     ver[0] = 1;
     ver[1] = 0;
     ver[2] = 0;
-    ver[3] = 2;
+    ver[3] = 3;
 }
 
 void nk_init(){
@@ -2784,7 +2784,7 @@ int nk_decode_channel_submit_key_result(const unsigned char* frame, const unsign
     if (nk_decode_header(frame, frameSize, &opcode, &payloadLen) != 0)
         return -1;
 
-    if (opcode != NK_OPCODE_CHANNEL_REQUEST_DM)
+    if (opcode != NK_OPCODE_CHANNEL_SUBMIT_KEY_RESULT)
         return -1;
 
     const unsigned char* payload = frame + NK_HEADER_SIZE;
@@ -3034,14 +3034,14 @@ unsigned char* nk_encode_sync_channel_keys(const unsigned int channelId, const N
     if (!txKey || !frameSize)
         return NULL;
 
-    unsigned int plainLen = 4 + 2 + 2;
+    unsigned int plainLen = 8;
 
     for (unsigned short i = 0; i < deviceKeysLen; i++) {
-        plainLen += 4 + 4 + 4 + 4 + 2 + deviceKeys[i].encryptedKeySize;
+        plainLen += 14 + deviceKeys[i].encryptedKeySize;
     }
 
     for (unsigned short i = 0; i < backupKeysLen; i++) {
-        plainLen += 4 + 4 + 2 + backupKeys[i].encryptedKeySize;
+        plainLen += 6 + backupKeys[i].encryptedKeySize;
     }
 
     unsigned char* plain = malloc(plainLen);
@@ -3311,12 +3311,12 @@ int nk_decode_channel_message_send(const unsigned char* frame, const unsigned in
 }
 
 unsigned char* nk_encode_channel_message_deliver(const unsigned int channelId, const NKChannelMessageData* message, 
-                                                 const unsigned char txKey[NK_ED25519_SECRET_KEY_SIZE], unsigned int* frameSize)
+                                                 const unsigned char txKey[NK_X25519_KEY_SIZE], unsigned int* frameSize)
 {
     if (!message || !txKey || !frameSize)
         return NULL;
 
-    unsigned int plainLen = 4 + sizeof(unsigned int) * 4 + 2 + message->payloadSize;
+    unsigned int plainLen = 4 + sizeof(unsigned int) * 4 + 2 + message->payloadSize + NK_ED25519_SIG_SIZE;
 
     unsigned char* plain = malloc(plainLen);
     if (!plain)
@@ -3333,6 +3333,7 @@ unsigned char* nk_encode_channel_message_deliver(const unsigned int channelId, c
 
     p += nk_encode_u16(p, message->payloadSize);
     p += nk_encode_bytes(p, message->payload, message->payloadSize);
+    p += nk_encode_bytes(p, message->sig, NK_ED25519_SIG_SIZE);
 
     unsigned int payloadLen = 0;
     unsigned char* payload = nk_encrypt_payload(txKey, plain, p - plain, &payloadLen);
@@ -3359,7 +3360,7 @@ unsigned char* nk_encode_channel_message_deliver(const unsigned int channelId, c
     return frame;
 }
 
-int nk_decode_channel_message_deliver(const unsigned char* frame, const unsigned int frameSize, const unsigned char rxKey[NK_ED25519_SECRET_KEY_SIZE],
+int nk_decode_channel_message_deliver(const unsigned char* frame, const unsigned int frameSize, const unsigned char rxKey[NK_X25519_KEY_SIZE],
                                       unsigned int* channelId, NKChannelMessageData* message)
 {
     if (!frame || !rxKey || !channelId || !message)
@@ -3396,6 +3397,7 @@ int nk_decode_channel_message_deliver(const unsigned char* frame, const unsigned
 
     p += nk_decode_u16(p, &message->payloadSize);
     p += nk_decode_bytes(p, message->payload, message->payloadSize);
+    p += nk_decode_bytes(p, message->sig, NK_ED25519_SIG_SIZE);
 
     free(plain);
     return 0;
@@ -3480,7 +3482,7 @@ int nk_decode_sync_channel_history_request(const unsigned char* frame, const uns
 }
 
 unsigned char* nk_encode_sync_channel_history(const unsigned int channelId, const NKChannelMessageData messages[NK_MAX_PAYLOAD_ARRAY_SIZE], const unsigned short messagesLen,
-                                              const unsigned char txKey[NK_ED25519_SECRET_KEY_SIZE], unsigned int* frameSize)
+                                              const unsigned char txKey[NK_X25519_KEY_SIZE], unsigned int* frameSize)
 {
     if (!messages || !txKey || !frameSize)
         return NULL;
@@ -3488,7 +3490,7 @@ unsigned char* nk_encode_sync_channel_history(const unsigned int channelId, cons
     unsigned int plainLen = 4 + 2;
 
     for (unsigned short i = 0; i < messagesLen; i++) {
-        plainLen += sizeof(unsigned int) * 4 + 2 + messages[i].payloadSize;
+        plainLen += 26 + messages[i].payloadSize + NK_ED25519_SIG_SIZE;
     }
 
     unsigned char* plain = malloc(plainLen);
@@ -3503,6 +3505,7 @@ unsigned char* nk_encode_sync_channel_history(const unsigned int channelId, cons
     for (unsigned short i = 0; i < messagesLen; i++) {
         const NKChannelMessageData* m = &messages[i];
 
+        p += nk_encode_u64(p, m->updateTime);
         p += nk_encode_u32(p, m->messageId);
         p += nk_encode_u32(p, m->senderId);
         p += nk_encode_u32(p, m->senderDeviceId);
@@ -3510,6 +3513,7 @@ unsigned char* nk_encode_sync_channel_history(const unsigned int channelId, cons
 
         p += nk_encode_u16(p, m->payloadSize);
         p += nk_encode_bytes(p, m->payload, m->payloadSize);
+        p += nk_encode_bytes(p, m->sig, NK_ED25519_SIG_SIZE);
     }
 
     unsigned int payloadLen = 0;
@@ -3537,7 +3541,7 @@ unsigned char* nk_encode_sync_channel_history(const unsigned int channelId, cons
     return frame;
 }
 
-int nk_decode_sync_channel_history(const unsigned char* frame, const unsigned int frameSize, const unsigned char rxKey[NK_ED25519_SECRET_KEY_SIZE], unsigned int* channelId, 
+int nk_decode_sync_channel_history(const unsigned char* frame, const unsigned int frameSize, const unsigned char rxKey[NK_X25519_KEY_SIZE], unsigned int* channelId, 
                                    NKChannelMessageData messages[NK_MAX_PAYLOAD_ARRAY_SIZE], unsigned short* messagesLen)
 {
     if (!frame || !rxKey || !channelId || !messages || !messagesLen)
@@ -3549,8 +3553,9 @@ int nk_decode_sync_channel_history(const unsigned char* frame, const unsigned in
     if (nk_decode_header(frame, frameSize, &opcode, &payloadLen) != 0)
         return -1;
 
-    if (opcode != NK_OPCODE_SYNC_CHANNEL_HISTORY)
+    if (opcode != NK_OPCODE_SYNC_CHANNEL_HISTORY){
         return -1;
+    }
 
     unsigned char* plain = malloc(payloadLen);
     if (!plain)
@@ -3559,7 +3564,7 @@ int nk_decode_sync_channel_history(const unsigned char* frame, const unsigned in
     unsigned int plainLen = 0;
 
     if (nk_decrypt_payload(rxKey, frame + NK_HEADER_SIZE, payloadLen, plain, &plainLen) != 0) {
-        free(plain);
+        free(frame);
         return -1;
     }
 
@@ -3569,11 +3574,12 @@ int nk_decode_sync_channel_history(const unsigned char* frame, const unsigned in
     p += nk_decode_u16(p, messagesLen);
 
     if (*messagesLen > NK_MAX_PAYLOAD_ARRAY_SIZE)
-        goto fail;
+        return -1;
 
     for (unsigned short i = 0; i < *messagesLen; i++) {
         NKChannelMessageData* m = &messages[i];
 
+        p += nk_decode_u64(p, &m->updateTime);
         p += nk_decode_u32(p, &m->messageId);
         p += nk_decode_u32(p, &m->senderId);
         p += nk_decode_u32(p, &m->senderDeviceId);
@@ -3581,14 +3587,11 @@ int nk_decode_sync_channel_history(const unsigned char* frame, const unsigned in
 
         p += nk_decode_u16(p, &m->payloadSize);
         p += nk_decode_bytes(p, m->payload, m->payloadSize);
+        p += nk_decode_bytes(p, m->sig, NK_ED25519_SIG_SIZE);
     }
 
     free(plain);
     return 0;
-
-fail:
-    free(plain);
-    return -1;
 }
 
 unsigned char* nk_encode_channel_typing_update(const unsigned int channelId, const unsigned int typingStatus, const unsigned char txKey[NK_X25519_KEY_SIZE], unsigned int* frameSize){

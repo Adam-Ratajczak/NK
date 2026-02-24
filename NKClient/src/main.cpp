@@ -114,6 +114,9 @@ int main(int, char**)
     ChannelKeysManager::Register();
     ChannelMessagesManager::Register();
     ChannelsManager::Register();
+
+    // io.Fonts->AddFontFromFileTTF("fonts/NotoSans-Regular.ttf", 18.0f);
+
     FormManager::Open("LoginForm");
 
     // Setup Dear ImGui style

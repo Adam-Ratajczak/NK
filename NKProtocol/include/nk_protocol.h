@@ -198,6 +198,7 @@ typedef struct NKChannelMessageData {
     unsigned int keyVersion;
     unsigned short payloadSize;
     unsigned char payload[NK_MAX_MESSAGE_SIZE];
+    unsigned char sig[NK_ED25519_SIG_SIZE];
 } NKChannelMessageData;
 #define NK_INVALID_MESSAGE                           0xFFFFFFFF
 

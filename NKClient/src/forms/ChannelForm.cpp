@@ -74,27 +74,29 @@ void ChannelForm::Render()
 
         ImGui::BeginChild("Messages", ImVec2(0, -80), false);
 
-        if (ImGui::GetScrollY() <= 0.0f) {
-            if (!_messages.empty()) {
-                auto oldest = _messages.begin()->second.MessageId;
-                NetworkManager::RequestChannelHistory(
-                    ChannelInfo.ChannelId,
-                    oldest,
-                    25
-                );
-            }
-        }
+        // if (ImGui::GetScrollY() <= 0.0f) {
+        //     if (!_messages.empty()) {
+        //         auto oldest = _messages.begin()->second.MessageId;
+        //         NetworkManager::RequestChannelHistory(
+        //             ChannelInfo.ChannelId,
+        //             oldest,
+        //             25
+        //         );
+        //     }
+        // }
 
         for (auto& [id, msg] : _messages) {
             std::string text;
 
-            if (msg.IsDecrypted) {
-                text = std::string(msg.Plaintext.begin(), msg.Plaintext.end());
-            } else {
-                text = "[encrypted]";
-            }
+            if(msg.ChannelId == ChannelInfo.ChannelId){
+                if (msg.IsDecrypted) {
+                    text = std::string(msg.Plaintext.begin(), msg.Plaintext.end());
+                } else {
+                    text = "[encrypted]";
+                }
 
-            ImGui::Text("[%u] %s", msg.SenderId, text.c_str());
+                ImGui::Text("[%u] %s", msg.SenderId, text.c_str());
+            }
         }
 
         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
@@ -116,7 +118,11 @@ void ChannelForm::Render()
         if (ImGui::Button("Send", ImVec2(70, 0))) {
             size_t len = strlen(_inputBuf);
             if (len > 0) {
-                NetworkManager::SendMessage(ChannelInfo.ChannelId, _inputBuf, _channelKey);
+                if(_channelKey.ChannelId == ChannelInfo.ChannelId){
+                    printf("Sending payload\n");
+                    fflush(stdout);
+                    NetworkManager::SendMessage(ChannelInfo.ChannelId, _inputBuf, _channelKey);
+                }
 
                 _inputBuf[0] = '\0';
 
@@ -154,6 +160,8 @@ void ChannelForm::AddRecipent(const UserInfo& user){
 
 void ChannelForm::AddChannelKey(const ChannelKeyInfo& channelKey){
     if(channelKey.ChannelId == ChannelInfo.ChannelId){
+        printf("Key version: %d\n", channelKey.KeyVersion);
+        fflush(stdout);
         _channelKey = channelKey;
         NetworkManager::RequestChannelHistory(ChannelInfo.ChannelId, NK_INVALID_MESSAGE, 25);
     }

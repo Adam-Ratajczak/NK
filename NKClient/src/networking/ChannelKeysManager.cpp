@@ -18,6 +18,8 @@ void ChannelKeysManager::Subscribe(ChannelKeyInfoDelegate func){
 }
 
 void ChannelKeysManager::LoadDeviceEncryptedKeys(const std::vector<DeviceKeyEncryptedChannelKeyInfo>& keys){
+    printf("Device keys: %d\n", keys.size());
+    fflush(stdout);
     for (const auto& k : keys){
         _encryptedKeys.push_back(k);
     }
@@ -32,18 +34,26 @@ void ChannelKeysManager::LoadBackupEncryptedKeys(const std::vector<BackupKeyEncr
 
         if (nk_decrypt_payload(UserManager::UMK.data(), k.EncryptedKey.data(), k.EncryptedKey.size(), decrypted.data(), &outSize) != 0)
         {
+            printf("backup key decryption failed\n");
+            fflush(stdout);
             continue;
         }
 
-        if (outSize != 32)
+        if (outSize != 32){
+            printf("Invalid key size\n");
+            fflush(stdout);
             continue;
+        }
 
         ChannelKeyInfo info{};
         info.ChannelId = k.ChannelId;
         info.KeyVersion = k.KeyVersion;
         memcpy(info.Key.data(), decrypted.data(), 32);
 
+        printf("Key version: %d\n", info.KeyVersion);
+        fflush(stdout);
         _keys[MakeKey(info.ChannelId, info.KeyVersion)] = info;
+        Notify(info);
     }
 
     DecryptAllPossibleKeys();
@@ -51,20 +61,26 @@ void ChannelKeysManager::LoadBackupEncryptedKeys(const std::vector<BackupKeyEncr
 }
 
 void ChannelKeysManager::DecryptAllPossibleKeys(){
-    std::map<unsigned int, DeviceConn> _deviceConnections;
+    std::map<unsigned int, DeviceConn> deviceConnections;
+    std::vector<unsigned int> missingDeviceIds;
     for (const auto& ek : _encryptedKeys){
-        if(_deviceConnections.find(ek.SenderDeviceId) != _deviceConnections.end()){
+        if(deviceConnections.find(ek.SenderDeviceId) != deviceConnections.end()){
             continue;
         }
         DeviceConn conn;
         if(DevicesManager::GetConnection(ek.SenderDeviceId, conn)){
-            _deviceConnections[ek.SenderDeviceId] = conn;
+            deviceConnections[ek.SenderDeviceId] = conn;
+        }else{
+            auto it = std::find(missingDeviceIds.begin(), missingDeviceIds.end(), ek.SenderDeviceId);
+            if(it == missingDeviceIds.end()){
+                missingDeviceIds.emplace_back(ek.SenderDeviceId);
+            }
         }
     }
 
     for (auto itEk = _encryptedKeys.begin(); itEk != _encryptedKeys.end();){
-        auto itDev = _deviceConnections.find(itEk->SenderDeviceId);
-        if(itDev == _deviceConnections.end()){
+        auto itDev = deviceConnections.find(itEk->SenderDeviceId);
+        if(itDev == deviceConnections.end()){
             itEk++;
             continue;
         }
@@ -73,11 +89,15 @@ void ChannelKeysManager::DecryptAllPossibleKeys(){
 
         if (nk_decrypt_payload(itDev->second.SharedSecret.data(), itEk->EncryptedKey.data(), (unsigned int)itEk->EncryptedKey.size(), decrypted.data(), &outSize) != 0)
         {
+            printf("device key decryption failed\n");
+            fflush(stdout);
             itEk++;
             continue;
         }
 
         if (outSize != 32){
+            printf("Invalid key size\n");
+            fflush(stdout);
             itEk++;
             continue;
         }
@@ -87,10 +107,16 @@ void ChannelKeysManager::DecryptAllPossibleKeys(){
         info.KeyVersion = itEk->KeyVersion;
         memcpy(info.Key.data(), decrypted.data(), 32);
 
+        printf("Key version: %d\n", info.KeyVersion);
+        fflush(stdout);
         _keys[MakeKey(info.ChannelId, info.KeyVersion)] = info;
         itEk = _encryptedKeys.erase(itEk);
 
         Notify(info);
+    }
+
+    if(!missingDeviceIds.empty()){
+        NetworkManager::RequestDevices(missingDeviceIds);
     }
 }
 
