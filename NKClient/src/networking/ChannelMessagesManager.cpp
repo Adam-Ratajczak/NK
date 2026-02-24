@@ -195,7 +195,7 @@ bool ChannelMessagesManager::VerifyMessage(const ChannelEncryptedMessageInfo& ms
         return false;
     }
 
-    if (nk_verify_signature(conn.Ed25519_pub.data(), msg.Signed.data(), msg.Signed.size(), msg.Signature.data()) != 0)
+    if (nk_verify_signature(conn.Ed25519_pub.data(), msg.Ciphertext.data(), msg.Ciphertext.size(), msg.Signature.data()) != 0)
     {
         printf("Sig verify failed: %x %x %x %x\n", msg.Signature[0], msg.Signature[1], msg.Signature[2], msg.Signature[3]);
         fflush(stdout);

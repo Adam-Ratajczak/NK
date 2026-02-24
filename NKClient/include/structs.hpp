@@ -103,7 +103,6 @@ struct ChannelEncryptedMessageInfo {
     unsigned int KeyVersion;
     std::chrono::system_clock::time_point Time;
     std::vector<unsigned char> Ciphertext;
-    std::vector<unsigned char> Signed;
     std::vector<unsigned char> Signature;
 };
 

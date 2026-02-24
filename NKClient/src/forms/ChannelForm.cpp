@@ -10,8 +10,9 @@
 #include "nk_protocol.h"
 
 DMChannelInfo ChannelForm::ChannelInfo;
-UserInfo ChannelForm::_recipent;
+RecipentsInfo ChannelForm::_recipents;
 ChannelKeyInfo ChannelForm::_channelKey;
+std::unordered_map<unsigned int, UserInfo> ChannelForm::_users;
 std::unordered_map<unsigned int, ChannelMessageInfo> ChannelForm::_messages;
 char ChannelForm::_inputBuf[512] = {};
 float ChannelForm::_lastTypingTime = 0.0f;
@@ -19,9 +20,10 @@ bool ChannelForm::_isTyping = false;
 void ChannelForm::Create(){
     FormManager::SubscribeOpen("ChannelForm", &ChannelForm::Open);
     FormManager::SubscribeRender("ChannelForm", &ChannelForm::Render);
-    UserManager::Subscribe(&ChannelForm::AddRecipent);
+    ChannelsManager::SubscribeRecipents(&ChannelForm::AddRecipents);
     ChannelKeysManager::Subscribe(&ChannelForm::AddChannelKey);
     ChannelMessagesManager::Subscribe(&ChannelForm::AddMessage);
+    UserManager::Subscribe(&ChannelForm::AddUser);
 }
 
 void ChannelForm::Destroy(){
@@ -31,7 +33,13 @@ void ChannelForm::Destroy(){
 
 void ChannelForm::Open(){
     MainBar::Open();
-    UserManager::GetUserInfo(ChannelInfo.UserId, _recipent);
+    RecipentsInfo recipents;
+    if(ChannelsManager::GetRecipents(ChannelInfo.ChannelId, recipents)){
+        AddRecipents(recipents);
+    }else{
+        NetworkManager::RequestChannelRecipents(ChannelInfo.ChannelId);
+    }
+
     ChannelKeyInfo key;
     if(ChannelKeysManager::GetActiveChannelKey(ChannelInfo.ChannelId, _channelKey)){
         AddChannelKey(key);
@@ -69,7 +77,8 @@ void ChannelForm::Render()
 
     if (ImGui::BeginChild("MainPanel", ImVec2(panel_width, panel_height), true))
     {
-        ImGui::Text("%s#%u", _recipent.UserName.c_str(), _recipent.UserTag);
+        auto rec = _users[ChannelInfo.UserId];
+        ImGui::Text("%s#%u", rec.UserName.c_str(), rec.UserTag);
         ImGui::Separator();
 
         ImGui::BeginChild("Messages", ImVec2(0, -80), false);
@@ -90,7 +99,7 @@ void ChannelForm::Render()
 
             if(msg.ChannelId == ChannelInfo.ChannelId){
                 text = std::string(msg.Plaintext.begin(), msg.Plaintext.end());
-                ImGui::Text("[%u] %s", msg.SenderId, text.c_str());
+                ImGui::Text("[%s] %s", _users[msg.SenderId].UserName.c_str(), text.c_str());
             }
         }
 
@@ -147,9 +156,15 @@ void ChannelForm::Render()
     ImGui::End();
 }
 
-void ChannelForm::AddRecipent(const UserInfo& user){
-    if(user.UserId == ChannelInfo.UserId){
-        _recipent = user;
+void ChannelForm::AddRecipents(const RecipentsInfo& recipents){
+    if(recipents.ChannelId == ChannelInfo.ChannelId){
+        _recipents = recipents;
+        for(auto id : recipents.Recipents){
+            UserInfo user;
+            if(UserManager::GetUserInfo(id, user)){
+                _users[id] = user;
+            }
+        }
     }
 }
 
@@ -165,5 +180,11 @@ void ChannelForm::AddChannelKey(const ChannelKeyInfo& channelKey){
 void ChannelForm::AddMessage(const ChannelMessageInfo& message){
     if(message.ChannelId == ChannelInfo.ChannelId){
         _messages[message.MessageId] = message;
+    }
+}
+
+void ChannelForm::AddUser(const UserInfo& user){
+    if(std::find(_recipents.Recipents.begin(), _recipents.Recipents.end(), user.UserId) != _recipents.Recipents.end()){
+        _users[user.UserId] = user;
     }
 }

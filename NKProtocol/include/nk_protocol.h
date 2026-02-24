@@ -101,6 +101,7 @@
 #define NK_ERROR_DEVICE_NOT_READY               0x1009
 #define NK_ERROR_NOTHING_TO_SEND                0x1010
 #define NK_ERROR_INVALID_SIGNATURE              0x1011
+#define NK_ERROR_ALREADY_EXISTS                 0x1012
 #define NK_ERROR_OPCODE_NOT_SUPPORTED           0x1FFD
 #define NK_ERROR_NOT_IMPLEMENTED                0x1FFE
 #define NK_ERROR_INTERNAL                       0x1FFF
@@ -198,9 +199,7 @@ typedef struct NKChannelMessageData {
     unsigned int senderDeviceId;
     unsigned int keyVersion;
     unsigned short payloadSize;
-    unsigned short signedSize;
     unsigned char payload[NK_MAX_MESSAGE_SIZE];
-    unsigned char signedBuf[NK_MAX_MESSAGE_SIZE];
     unsigned char sig[NK_ED25519_SIG_SIZE];
 } NKChannelMessageData;
 #define NK_INVALID_MESSAGE                           0xFFFFFFFF
@@ -403,7 +402,7 @@ unsigned char* nk_encode_channel_message_send(const unsigned int channelId, cons
                                               const unsigned char txKey[NK_X25519_KEY_SIZE], unsigned int* frameSize);
 int nk_decode_channel_message_send(const unsigned char* frame, const unsigned int frameSize, const unsigned char rxKey[NK_X25519_KEY_SIZE], 
                                    unsigned int* channelId, unsigned int* keyVersion, unsigned char payload[NK_MAX_MESSAGE_SIZE], unsigned short* payloadSize,
-                                   unsigned char signature[NK_ED25519_SIG_SIZE], unsigned char* signedBuf, unsigned int* signedLen);
+                                   unsigned char signature[NK_ED25519_SIG_SIZE]);
 
 unsigned char* nk_encode_channel_message_deliver(const unsigned int channelId, const NKChannelMessageData* message, 
                                                  const unsigned char txKey[NK_X25519_KEY_SIZE], unsigned int* frameSize);

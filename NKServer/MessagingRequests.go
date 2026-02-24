@@ -31,9 +31,6 @@ func receiveOpcodeChannelMessageSend(client *ClientConn, data []byte) {
 	var payloadSize C.ushort
 
 	var sig [C.NK_ED25519_SIG_SIZE]C.uchar
-	var signed [C.NK_MAX_MESSAGE_SIZE + 10]C.uchar
-	var signedLen C.uint
-
 	if C.nk_decode_channel_message_send(
 		(*C.uchar)(unsafe.Pointer(&data[0])),
 		C.uint(len(data)),
@@ -43,8 +40,6 @@ func receiveOpcodeChannelMessageSend(client *ClientConn, data []byte) {
 		&payload[0],
 		&payloadSize,
 		&sig[0],
-		&signed[0],
-		&signedLen,
 	) != 0 {
 		sendError(client, int(C.NK_OPCODE_CHANNEL_MESSAGE_SEND), int(C.NK_ERROR_INVALID_FRAME))
 		return
@@ -82,8 +77,8 @@ func receiveOpcodeChannelMessageSend(client *ClientConn, data []byte) {
 
 	if C.nk_verify_signature(
 		(*C.uchar)(unsafe.Pointer(&edPub[0])),
-		&signed[0],
-		signedLen,
+		&payload[0],
+		C.uint(payloadSize),
 		&sig[0],
 	) != 0 {
 		fmt.Println("Wrong signature")

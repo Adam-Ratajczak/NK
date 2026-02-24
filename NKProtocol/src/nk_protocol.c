@@ -3216,10 +3216,8 @@ unsigned char* nk_encode_channel_message_send(const unsigned int channelId, cons
     p += nk_encode_u16(p, encSize);
     p += nk_encode_bytes(p, enc, encSize);
 
-    unsigned int signedLen = p - plain;
-
     unsigned char sig[NK_ED25519_SIG_SIZE];
-    crypto_sign_detached(sig, NULL, plain, signedLen, ed25519_sk);
+    crypto_sign_detached(sig, NULL, enc, encSize, ed25519_sk);
 
     p += nk_encode_bytes(p, sig, NK_ED25519_SIG_SIZE);
 
@@ -3252,10 +3250,8 @@ unsigned char* nk_encode_channel_message_send(const unsigned int channelId, cons
 
 int nk_decode_channel_message_send(const unsigned char* frame, const unsigned int frameSize, const unsigned char rxKey[NK_X25519_KEY_SIZE], 
                                    unsigned int* channelId, unsigned int* keyVersion, unsigned char payload[NK_MAX_MESSAGE_SIZE], unsigned short* payloadSize,
-                                   unsigned char signature[NK_ED25519_SIG_SIZE], unsigned char* signedBuf, unsigned int* signedLen){
-    if (!frame || !rxKey || !channelId || !keyVersion ||
-        !payload || !payloadSize || !signature ||
-        !signedBuf || !signedLen)
+                                   unsigned char signature[NK_ED25519_SIG_SIZE]){
+    if (!frame || !rxKey || !channelId || !keyVersion || !payload || !payloadSize || !signature)
         return -1;
 
     unsigned char opcode = 0;
@@ -3298,11 +3294,6 @@ int nk_decode_channel_message_send(const unsigned char* frame, const unsigned in
     }
 
     p += nk_decode_bytes(p, payload, *payloadSize);
-
-    *signedLen = 4 + 4 + 2 + *payloadSize;
-
-    memcpy(signedBuf, plain, *signedLen);
-
     p += nk_decode_bytes(p, signature, NK_ED25519_SIG_SIZE);
 
     sodium_memzero(plain, plainLen);
@@ -3404,17 +3395,7 @@ int nk_decode_channel_message_deliver(const unsigned char* frame, const unsigned
     }
 
     p += nk_decode_bytes(p, message->payload, message->payloadSize);
-
     p += nk_decode_bytes(p, message->sig, NK_ED25519_SIG_SIZE);
-
-    unsigned char* s = message->signedBuf;
-
-    s += nk_encode_u32(s, *channelId);
-    s += nk_encode_u32(s, message->keyVersion);
-    s += nk_encode_u16(s, message->payloadSize);
-    s += nk_encode_bytes(s, message->payload, message->payloadSize);
-
-    message->signedSize = (unsigned short)(s - message->signedBuf);
 
     free(plain);
     return 0;
@@ -3605,15 +3586,6 @@ int nk_decode_sync_channel_history(const unsigned char* frame, const unsigned in
         p += nk_decode_u16(p, &m->payloadSize);
         p += nk_decode_bytes(p, m->payload, m->payloadSize);
         p += nk_decode_bytes(p, m->sig, NK_ED25519_SIG_SIZE);
-
-        unsigned char* s = m->signedBuf;
-
-        s += nk_encode_u32(s, *channelId);
-        s += nk_encode_u32(s, m->keyVersion);
-        s += nk_encode_u16(s, m->payloadSize);
-        s += nk_encode_bytes(s, m->payload, m->payloadSize);  
-
-        m->signedSize = (unsigned short)(s - m->signedBuf);
     }
 
     free(plain);

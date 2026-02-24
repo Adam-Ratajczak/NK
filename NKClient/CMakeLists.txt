@@ -229,12 +229,6 @@ else() # Emscripten settings
     endif()
     message(STATUS "Using ${IMGUI_EMSCRIPTEN_WEBGPU_FLAG} WebGPU implementation")
 
-    target_compile_options(${IMGUI_EXECUTABLE} PUBLIC 
-        "-fno-rtti"
-        "-fno-exceptions"
-        "-O3"
-        "-flto"
-    )
     target_link_options(${IMGUI_EXECUTABLE} PRIVATE
             "${IMGUI_EMSCRIPTEN_WEBGPU_FLAG}"
             "${IMGUI_EMSCRIPTEN_GLFW3}"
@@ -250,7 +244,6 @@ else() # Emscripten settings
             "-sEXPORTED_RUNTIME_METHODS=['HEAPU8', 'ccall','cwrap']"
             "--shell-file=${CMAKE_CURRENT_LIST_DIR}/shell_minimal.html"
             "--preload-file ${CMAKE_CURRENT_LIST_DIR}/fonts/"
-            "-flto"
     )
     set_target_properties(${IMGUI_EXECUTABLE} PROPERTIES OUTPUT_NAME "index")
 endif()
